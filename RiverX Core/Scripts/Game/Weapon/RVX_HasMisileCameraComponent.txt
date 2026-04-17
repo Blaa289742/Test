@@ -1,0 +1,25 @@
+//------------------------------------------------------------------------------------------------
+//! Returns true if vehicle has RVX_MissileCameraComponent
+[BaseContainerProps()]
+class RVX_HasMisileCameraComponent : SCR_AvailableActionCondition
+{
+	//------------------------------------------------------------------------------------------------
+	override bool IsAvailable(SCR_AvailableActionsConditionData data)
+	{
+		if (!data)
+			return false;
+
+		IEntity entity = data.GetCurrentVehicle();
+		
+		// for turrets
+		if (entity && entity.GetParent())
+			entity = entity.GetParent();
+		
+		if (!entity)
+			return false;
+
+
+		RVX_MissileCameraComponent missileCameraComponent = RVX_MissileCameraComponent.Cast(entity.FindComponent(RVX_MissileCameraComponent));
+		return missileCameraComponent != null;
+	}
+};

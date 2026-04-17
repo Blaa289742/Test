@@ -1,0 +1,94 @@
+class RVX_LaserTargetManager
+{	
+	// ---------------- Singleton----------------------
+	private static ref RVX_LaserTargetManager instance;
+
+    static RVX_LaserTargetManager getInstance() {
+        if (instance == null) {
+            instance = new RVX_LaserTargetManager();
+        }
+        return instance;
+    }
+	// ---------------- Singleton----------------------
+	
+	
+	ref map<RplId, ref LaserTargetData> laserTargetMap = new map<RplId, ref LaserTargetData>();
+	
+	array<ref LaserTargetData> GetLaserTargets(string code)
+	{
+		array<ref LaserTargetData> result = {};
+		for (int i = 0; i < laserTargetMap.Count(); i++)
+		{
+			if (laserTargetMap.GetElement(i).code == code)
+				result.Insert(laserTargetMap.GetElement(i));
+		}
+		
+		return result;
+	}
+	
+	void CreateLaserTarget(RplId creatorId, string laserCode)
+	{
+		ref LaserTargetData laserTarget = new LaserTargetData();
+		laserTarget.code = laserCode;
+		
+		laserTargetMap.Set(creatorId, laserTarget);
+	}
+	
+	void RemoveLaserTarget(RplId creatorId)
+	{
+		if (laserTargetMap.Contains(creatorId))
+		{
+			laserTargetMap.Remove(creatorId);
+		}
+	}
+	
+	void UpdateLaserTarget(RplId creatorId, vector position, string laserCode)
+	{
+		if(laserTargetMap.Contains(creatorId))
+		{
+			laserTargetMap.Get(creatorId).position = position;
+			laserTargetMap.Get(creatorId).code = laserCode;
+		}
+	}
+	
+	void ClearTargets()
+	{
+		laserTargetMap.Clear();
+	}
+}
+
+modded class ArmaReforgerScripted
+{
+	override void OnAfterInit(BaseWorld world)
+	{
+		super.OnAfterInit(world);
+		RVX_LaserTargetManager.getInstance().ClearTargets();
+	}
+}
+
+class LaserTargetData
+{
+	string code;
+	vector position;
+	
+	string GetCode()
+	{
+		return code;
+	}
+	
+	vector GetPosition()
+	{
+		return position;
+	}
+
+	
+	void SetCode(string value)
+	{
+		code = value;
+	}
+	
+	void SetPosition(vector value)
+	{
+		position = value;
+	}
+}

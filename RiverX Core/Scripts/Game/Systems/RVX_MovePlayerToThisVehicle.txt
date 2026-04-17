@@ -1,0 +1,79 @@
+class RVX_MovePlayerToThisVehicleClass : ScriptGameComponentClass
+{
+
+}
+
+class RVX_MovePlayerToThisVehicle : ScriptGameComponent
+{
+	[Attribute(defvalue: "", desc: "")]
+	protected bool hasInitialVelocity;
+		
+	[Attribute(defvalue: "", desc: "")]
+	protected bool isEngineOn;
+	
+	[Attribute(defvalue: "100", desc: "")]
+	protected float initialVelocity;
+	
+	override void OnPostInit(IEntity owner)
+    {
+		GetGame().GetCallqueue().CallLater(Init, 1000, false);
+    }
+	
+	void Init()
+	{
+		BaseCompartmentSlot pilotCompartment = GetPilotCompartmentSlot(GetOwner());
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+        if(player)
+        {
+            ChimeraCharacter character = ChimeraCharacter.Cast(player);
+            CompartmentAccessComponent compartmentAccess = character.GetCompartmentAccessComponent();
+            //pilotCompartment.EjectOccupant(true);
+            compartmentAccess.KickFromVehicle(0);
+            GetIn(compartmentAccess, GetOwner(), pilotCompartment);
+            GetGame().GetCallqueue().CallLater(GetIn, 100, false, compartmentAccess, GetOwner(), pilotCompartment);
+            GetGame().GetCallqueue().CallLater(SetInitialVelocity, 100, false);
+            GetGame().GetCallqueue().CallLater(SetEngineOn, 100, false);
+        }
+
+	}
+	
+	void SetInitialVelocity()
+	{
+		if (!hasInitialVelocity)
+			return;
+		
+		vector forward = GetOwner().GetTransformAxis(2); // Forward direction		
+		Physics physics = GetOwner().GetPhysics();
+		if (physics)
+		{
+		    physics.SetVelocity(forward * initialVelocity);
+		}
+	}
+	
+	void SetEngineOn()
+	{
+		if (!isEngineOn)
+			return;
+		
+		VehicleHelicopterSimulation simulation = Inject<VehicleHelicopterSimulation>.Get(GetOwner());
+		simulation.EngineStart();
+		
+		SignalsManagerComponent signalsManager = Inject<SignalsManagerComponent>.Get(GetOwner());
+		signalsManager.SetSignalValue(signalsManager.FindSignal("EngineRPM"), 6600);
+	}
+	
+	void GetIn(CompartmentAccessComponent compartmentAccess, IEntity entity, BaseCompartmentSlot compartment)
+	{
+		Print("Change seat:");
+		bool changed = compartmentAccess.GetInVehicle(entity, compartment, true, 0, ECloseDoorAfterActions.RETURN_TO_PREVIOUS_STATE, false);
+		Print("Seat changed: " + changed);
+	}
+	
+	private BaseCompartmentSlot GetPilotCompartmentSlot(IEntity vehicle)
+	{
+		SCR_BaseCompartmentManagerComponent compartmentManager = SCR_BaseCompartmentManagerComponent.Cast(vehicle.FindComponent(SCR_BaseCompartmentManagerComponent));
+		array<BaseCompartmentSlot> compartments = {};
+		compartmentManager.GetCompartments(compartments);
+		return compartments.Get(0);
+	}
+}

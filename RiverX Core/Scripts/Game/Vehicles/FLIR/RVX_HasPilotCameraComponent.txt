@@ -1,0 +1,8 @@
+class RVX_HasPilotCameraComponentClass: ScriptComponentClass
+{
+
+}
+class RVX_HasPilotCameraComponent: ScriptComponent
+{
+	
+}

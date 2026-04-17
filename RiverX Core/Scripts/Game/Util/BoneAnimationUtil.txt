@@ -1,0 +1,58 @@
+class BoneAnimationUtil
+{
+	static void Rotate(IEntity entity, string boneName, float x, float y, float z)
+	{
+		vector angles = "0 0 0";
+		angles[0] = x;
+		angles[1] = y;
+		angles[2] = z;
+		entity.SetBone(entity.GetAnimation().GetBoneIndex(boneName), angles, "0 0 0", 1);
+	}
+	
+	static void Rotate(IEntity entity, TNodeId boneIndex, float x, float y, float z)
+	{
+		vector angles = "0 0 0";
+		angles[0] = x;
+		angles[1] = y;
+		angles[2] = z;
+		entity.SetBone(boneIndex, angles, "0 0 0", 1);
+	}
+	
+	static void RotateX(IEntity entity, TNodeId boneIndex, float angle)
+	{
+		Rotate(entity, boneIndex, angle, 0, 0);
+	}
+	
+	static void RotateY(IEntity entity, TNodeId boneIndex, float angle)
+	{
+		Rotate(entity, boneIndex, 0, angle, 0);
+	}
+	
+	static void RotateZ(IEntity entity, TNodeId boneIndex, float angle)
+	{
+		Rotate(entity, boneIndex, 0, 0, angle);
+	}
+	
+	static void Translate(IEntity entity, string boneName, float x, float y, float z)
+	{
+		vector translate = "0 0 0";
+		translate[0] = x;
+		translate[1] = y;
+		translate[2] = z;
+		entity.SetBone(entity.GetAnimation().GetBoneIndex(boneName), "0 0 0", translate, 1);
+	}
+	
+	static void Translate(IEntity entity, TNodeId boneIndex, float x, float y, float z)
+	{
+		vector translate = "0 0 0";
+		translate[0] = x;
+		translate[1] = y;
+		translate[2] = z;
+		entity.SetBone(boneIndex, "0 0 0", translate, 1);
+	}
+	
+	static TNodeId GetBoneIndex(IEntity entity, string boneName)
+	{
+		return entity.GetAnimation().GetBoneIndex(boneName);
+	}
+}

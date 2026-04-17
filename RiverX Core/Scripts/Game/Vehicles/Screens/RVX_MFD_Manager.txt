@@ -1,0 +1,168 @@
+class RVX_MFD_ManagerClass : ScriptGameComponentClass
+{
+
+}
+
+// Main screen component, ancestor for all Vehicle screens
+class RVX_MFD_Manager : ScriptGameComponent
+{
+	[Attribute("", UIWidgets.Auto, "Initial page", "layout")]
+    protected string initialPage;
+	
+	[Attribute("30", UIWidgets.Slider, "Screen refresh rate. Higher values maye impact performance. 30FPS should be plenty",  "1 120 1")]
+    protected float screenRefreshRate;
+	
+	[Attribute("true", UIWidgets.Auto, "Force enable screens. (normally they require vehicle engine to be On)", "layout")]
+    protected bool forceEnabled;
+	
+	[Attribute("", UIWidgets.Auto, "MFD routing mapping",  "layout")]
+	protected ref array<ref RVX_MFD_RouteMapping> routeMapping;
+	
+	protected ref map<string, ref RVX_MFDComponent> ROUTES = new map<string, ref RVX_MFDComponent>();
+
+	protected string currentPageName = "";
+	protected IEntity mfdEntity;
+	protected RVX_MFDComponent currentPage;
+	
+    protected float m_fTargetCheckInterval = (1000/30) * 0.001; // 30fps
+	protected float m_fTargetCheckIntervalTimer = float.MAX;
+	
+	private BaseVehicleControllerComponent baseVehicleController;
+	
+	override void OnPostInit(IEntity owner)
+    {
+        super.OnPostInit(owner);
+		mfdEntity = owner;
+		m_fTargetCheckInterval = (1000/screenRefreshRate) * 0.001;
+		
+		LoadRouting();
+		GetGame().GetCallqueue().CallLater(InitializeComponents, 1000, false, owner);
+		GetGame().GetCallqueue().CallLater(InitializeRoutes, 1000, false, owner);
+		GetGame().GetCallqueue().CallLater(SetCurrentPageName, 1500, false, initialPage, true);
+		GetGame().GetCallqueue().CallLater(InitialDisplayDisable, 1700, false);
+		//GetGame().GetCallqueue().CallLater(StartFrameListener, 2000, false);
+    }
+	
+	/* 
+	* Method used for changing MFD page
+	*/
+	void SetCurrentPageName(string pageName, bool isInitial = false)
+	{
+		if (!isInitial && !IsVehicleEngineOn())
+			return;
+		
+		if (ROUTES.Contains(pageName))
+		{
+			if (currentPage)
+				currentPage.OnPageDeactivated();
+			
+			currentPage = ROUTES.Get(pageName);
+			currentPageName = pageName;
+			if (!isInitial)
+			    currentPage.OnPageActivated();
+		}
+	}
+	
+	/* 
+	* Get current page
+	*/
+	string GetCurrentPageName()
+	{
+		return currentPageName;
+	}
+	
+	/* 
+	* Start MFD display
+	*/
+	void StartFrameListener()
+	{
+		if (currentPage)
+			currentPage.OnPageActivated();
+		SetEventMask(mfdEntity, EntityEvent.FRAME);
+	}
+	
+	/* 
+	* Stop MFD display
+	*/
+	void StopFrameListener()
+	{
+		ClearEventMask(mfdEntity, EntityEvent.FRAME);
+		if (currentPage)
+		{
+			currentPage.SetScreenEnabled(0);
+			currentPage.OnPageDeactivated();
+		}
+	}
+	
+	/* 
+	* Button pressed event emitter
+	*/
+	void OnButtonPressed(string buttonIndex)
+	{
+		if (currentPage && IsVehicleEngineOn())
+			currentPage.OnButtonPressed(buttonIndex);
+	}
+	
+	///////////////////////////////////////////////////////
+	
+	override private void EOnFrame(IEntity owner, float timeSlice)
+	{			
+		m_fTargetCheckIntervalTimer += timeSlice;
+		if (m_fTargetCheckIntervalTimer < m_fTargetCheckInterval)
+			return;
+		m_fTargetCheckIntervalTimer = 0;
+		
+		if (!currentPage)
+			return;
+		
+		bool isEngineOn = IsVehicleEngineOn();
+		currentPage.SetScreenEnabled(isEngineOn);
+		if (isEngineOn)
+			currentPage.UpdateDisplay(timeSlice);
+	}
+
+	private void LoadRouting() 
+	{
+		foreach(RVX_MFD_RouteMapping route: routeMapping)
+		{
+			ROUTES.Set(route.routeName, route.mfdComponent);
+		}
+	}
+	
+	private void InitializeComponents(IEntity owner)
+	{
+		baseVehicleController = Inject<BaseVehicleControllerComponent>.Get(GetOwner());
+	}
+	
+	private void InitializeRoutes(IEntity owner)
+	{
+		for (int i = 0; i < ROUTES.Count(); i++)
+		{
+			RVX_MFDComponent page = ROUTES.Get(ROUTES.GetKey(i));
+			if (page)
+			{
+				page.Init(owner, this)
+			}
+		}
+	}
+	
+	private void InitialDisplayDisable()
+	{
+		currentPage.SetScreenEnabled(0);
+	}
+	
+	private bool IsVehicleEngineOn()
+	{
+		return (baseVehicleController && baseVehicleController.IsEngineOn()) || forceEnabled;
+	}
+}
+
+[BaseContainerProps(configRoot: true)]
+class RVX_MFD_RouteMapping
+{
+	[Attribute(desc: "MFD page name")]
+	string routeName;
+	
+	[Attribute(desc: "MFD page component")]
+	ref RVX_MFDComponent mfdComponent;
+}

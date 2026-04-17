@@ -1,0 +1,72 @@
+class RVX_AircraftManagerMenuBase: ChimeraMenuBase
+{
+	private string currentTab = "NAVIGATION";
+	
+	// tab widgets
+	FrameWidget navigationTab;
+	FrameWidget loadoutTab;
+	RVX_TabWidget navigationTabButton;
+	RVX_TabWidget loadoutTabButton;
+		
+	private ref RVX_AircraftManagerMapPage pageMap = new RVX_AircraftManagerMapPage();
+	
+	override void OnMenuOpened()
+	{
+		super.OnMenuOpened();
+		pageMap.Init(GetRootWidget());
+	
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonCancel").Insert(OnClose);
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonOk").Insert(Save);
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonNavTab").Insert(OnNavTabOpen);
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonLoadoutTab").Insert(OnLoadoutTabOpen);
+		
+		navigationTab = FrameWidget.Cast(GetRootWidget().FindAnyWidget("NavigationPage"));
+		loadoutTab = FrameWidget.Cast(GetRootWidget().FindAnyWidget("LoadoutPage"));
+		navigationTabButton = RVX_TabWidget.Cast(GetRootWidget().FindAnyWidget("NavTab").FindHandler(RVX_TabWidget));
+		loadoutTabButton = RVX_TabWidget.Cast(GetRootWidget().FindAnyWidget("LoadoutTab").FindHandler(RVX_TabWidget));
+	}
+
+	override void OnMenuUpdate(float tDelta)
+	{
+		super.OnMenuUpdate(tDelta);
+		
+		pageMap.Update();
+		UpdateTabs();
+	}
+	
+////// Updates per frame
+	void UpdateTabs()
+	{
+		navigationTab.SetVisible(currentTab == "NAVIGATION");
+		navigationTabButton.SetSelected(currentTab == "NAVIGATION");
+		loadoutTab.SetVisible(currentTab == "LOADOUT");
+		loadoutTabButton.SetSelected(currentTab == "LOADOUT");
+	}	
+////// Action handlers
+	protected void OnClose()
+	{
+		Close();
+	}
+	
+	protected void OnNavTabOpen()
+	{
+		currentTab = "NAVIGATION";
+	}
+	
+	protected void OnLoadoutTabOpen(Widget buttonWidget)
+	{
+		currentTab = "LOADOUT";
+	}
+	
+////// Save handlers
+	protected void Save()
+	{
+		pageMap.Save();
+		OnClose();
+	}	
+}
+
+modded enum ChimeraMenuPreset 
+{
+	RVX_AircraftManagerMenu
+}
