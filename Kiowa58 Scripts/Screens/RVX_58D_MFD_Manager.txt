@@ -1,0 +1,128 @@
+class RVX_58D_MFD_ManagerClass : ScriptGameComponentClass
+{
+
+}
+
+// Main screen component, ancestor for all Vehicle screens
+class RVX_58D_MFD_Manager : ScriptGameComponent
+{
+	[Attribute("", UIWidgets.Auto, "Initial page", "layout")]
+    protected string initialPage;
+	
+	[Attribute("true", UIWidgets.Auto, "Initial page", "layout")]
+    protected bool forceEnabled;
+	
+	protected string currentPageName = "HSD";
+	protected IEntity mfdEntity;
+	protected ref map<string, ref RVX_58D_MFDBasePage> ROUTES = new map<string, ref RVX_58D_MFDBasePage>();
+	protected RVX_58D_MFDBasePage currentPage;
+	
+    protected float m_fTargetCheckInterval = (1000/30) * 0.001; // 30fps
+	protected float m_fTargetCheckIntervalTimer = float.MAX;
+	
+	BaseVehicleControllerComponent baseVehicleController;
+	
+	override void OnPostInit(IEntity owner)
+    {
+        super.OnPostInit(owner);
+		mfdEntity = owner;
+		SetRoutes();
+		GetGame().GetCallqueue().CallLater(InitializeComponents, 1000, false, owner);
+		GetGame().GetCallqueue().CallLater(InitializeRoutes, 1000, false, owner);
+		GetGame().GetCallqueue().CallLater(SetCurrentPageName, 1500, false, initialPage, true);
+		GetGame().GetCallqueue().CallLater(InitialDisplayDisable, 1700, false);
+		//GetGame().GetCallqueue().CallLater(StartFrameListener, 2000, false);
+    }
+	
+	void SetCurrentPageName(string pageName, bool isInitial = false)
+	{
+		if (!isInitial && !IsVehicleEngineOn())
+			return;
+		
+		if (ROUTES.Contains(pageName))
+		{
+			if (currentPage)
+				currentPage.OnPageDeactivated();
+			
+			currentPage = ROUTES.Get(pageName);
+			currentPage.OnPageActivated();
+		}
+	}
+	
+	string GetCurrentPageName()
+	{
+		return currentPageName;
+	}
+	
+	void StartFrameListener()
+	{
+		SetEventMask(mfdEntity, EntityEvent.FRAME);
+	}
+	
+	void StopFrameListener()
+	{
+		ClearEventMask(mfdEntity, EntityEvent.FRAME);
+	}
+	
+	void OnButtonPressed(string buttonIndex)
+	{
+		if (currentPage && IsVehicleEngineOn())
+			currentPage.OnButtonPressed(buttonIndex);
+	}
+	
+	override protected void EOnFrame(IEntity owner, float timeSlice)
+	{			
+		m_fTargetCheckIntervalTimer += timeSlice;
+		if (m_fTargetCheckIntervalTimer < m_fTargetCheckInterval)
+			return;
+		m_fTargetCheckIntervalTimer = 0;
+		
+		if (!currentPage)
+			return;
+		
+		bool isEngineOn = IsVehicleEngineOn();
+		currentPage.SetScreenEnabled(isEngineOn);
+		if (isEngineOn)
+			currentPage.UpdateDisplay(timeSlice);
+	}
+	
+	protected void SetRoutes()
+	{
+		ROUTES.Set("HSD", new RVX_58D_MFD_HSD());
+		ROUTES.Set("WPT_LIST", new RVX_58D_MFD_WPT_LIST());
+		ROUTES.Set("VSD", new RVX_58D_MFD_VSD());
+		ROUTES.Set("WPN_VSD", new RVX_58D_MFD_WPN_VSD());
+		ROUTES.Set("MMS", new RVX_58D_MFD_MMS());
+		ROUTES.Set("LASER_CODES", new RVX_58D_MFD_LASER_CODES());
+		ROUTES.Set("BKUP_MISC", new RVX_58D_BKUP_MFD());
+		ROUTES.Set("CMWS", new RVX_CMWS());
+		ROUTES.Set("RFD", new RVX_RFD());
+	}
+	
+	private void InitializeComponents(IEntity owner)
+	{
+		baseVehicleController = BaseVehicleControllerComponent.Cast(GetOwner().GetParent().FindComponent(BaseVehicleControllerComponent));
+	}
+	
+	private void InitializeRoutes(IEntity owner)
+	{
+		/*for (int i = 0; i < ROUTES.Count(); i++)
+		{
+			RVX_58D_MFDBasePage page = ROUTES.Get(ROUTES.GetKey(i));
+			if (page)
+			{
+				page.Init(owner, this)
+			}
+		}*/
+	}
+	
+	private void InitialDisplayDisable()
+	{
+		currentPage.SetScreenEnabled(0);
+	}
+	
+	private bool IsVehicleEngineOn()
+	{
+		return (baseVehicleController && baseVehicleController.IsEngineOn()) || forceEnabled;
+	}
+}

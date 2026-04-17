@@ -1,0 +1,84 @@
+class RVX_58D_AircraftManagerMenu: ChimeraMenuBase
+{
+	private string currentTab = "NAVIGATION";
+	
+	// tab widgets
+	FrameWidget navigationTab;
+	FrameWidget loadoutTab;
+	RVX_TabWidget navigationTabButton;
+	RVX_TabWidget loadoutTabButton;
+		
+	private ref RVX_58D_AircraftManagerMapPage pageMap = new RVX_58D_AircraftManagerMapPage();
+	private ref RVX_58D_AircraftManagerLoadoutPage loadoutPage = new RVX_58D_AircraftManagerLoadoutPage();
+	
+	override void OnMenuOpened()
+	{
+		super.OnMenuOpened();
+		pageMap.Init(GetRootWidget());
+		loadoutPage.Init(GetRootWidget());
+	
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonCancel").Insert(OnClose);
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonOk").Insert(Save);
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonNavTab").Insert(OnNavTabOpen);
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonLoadoutTab").Insert(OnLoadoutTabOpen);
+		
+		navigationTab = FrameWidget.Cast(GetRootWidget().FindAnyWidget("NavigationPage"));
+		loadoutTab = FrameWidget.Cast(GetRootWidget().FindAnyWidget("LoadoutPage"));
+		navigationTabButton = RVX_TabWidget.Cast(GetRootWidget().FindAnyWidget("NavTab").FindHandler(RVX_TabWidget));
+		loadoutTabButton = RVX_TabWidget.Cast(GetRootWidget().FindAnyWidget("LoadoutTab").FindHandler(RVX_TabWidget));
+	}
+
+	override void OnMenuUpdate(float tDelta)
+	{
+		super.OnMenuUpdate(tDelta);
+		
+		pageMap.Update();
+		loadoutPage.Update();
+		UpdateTabs();
+	}
+	
+////// Updates per frame
+	void UpdateTabs()
+	{
+		navigationTab.SetVisible(currentTab == "NAVIGATION");
+		navigationTabButton.SetSelected(currentTab == "NAVIGATION");
+		loadoutTab.SetVisible(currentTab == "LOADOUT");
+		loadoutTabButton.SetSelected(currentTab == "LOADOUT");
+	}	
+////// Action handlers
+	private void OnClose()
+	{
+		Close();
+	}
+	
+	private void OnNavTabOpen()
+	{
+		currentTab = "NAVIGATION";
+	}
+	
+	private void OnLoadoutTabOpen(Widget buttonWidget)
+	{
+		currentTab = "LOADOUT";
+	}
+	
+////// Save handlers
+	private void Save()
+	{
+		pageMap.Save();
+		loadoutPage.Save();
+		OnClose();
+	}	
+}
+
+modded enum ChimeraMenuPreset 
+{
+	RVX_58D_AircraftManagerMenu
+}
+
+modded class SCR_SupportStationManagerComponent
+{
+	int GetStations(ESupportStationType type, notnull out array<SCR_BaseSupportStationComponent> supportStations)
+	{
+		return super.GetArrayOfSupportStationType(type, supportStations);
+	}
+}

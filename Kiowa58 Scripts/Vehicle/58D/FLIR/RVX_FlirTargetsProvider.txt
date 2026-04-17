@@ -1,0 +1,115 @@
+class RVX_FlirTargetsProvider
+{
+    static void GetTargetsData(int cameraIndex, int screenWidth, int screenHeight, vector orientation[4], IEntity fromEntity,  notnull out array<ref RVX_FlirTarget> targets)
+    {
+        RVX_TargetQueryResult queryResult = QueryTargets(orientation, fromEntity);
+		
+		foreach (IEntity target : queryResult.targets)
+		{
+			array<vector> positions = {};
+			GetRaytracePositions(positions, target);
+			/*if (!CheckVisibility(transform[3], target, fromEntity, positions))
+				continue;*/
+
+			RVX_FlirTarget flirTarget = new RVX_FlirTarget();
+			flirTarget.entity = target;
+			GetTargetScreenBorders(positions, cameraIndex, screenWidth, screenHeight, flirTarget.screenX, flirTarget.screenY, flirTarget.screenW, flirTarget.screenH);
+			targets.Insert(flirTarget);
+		}
+    }
+	
+	static RVX_TargetQueryResult QueryTargets(vector orientation[4], IEntity fromEntity)
+    {
+        RVX_TargetQueryResult result = new RVX_TargetQueryResult();
+		result.fromEntity = fromEntity;
+		
+		float radius = 2000;
+        vector transform[4];
+        fromEntity.GetTransform(transform);
+        vector center = transform[3];
+        GetGame().GetWorld().QueryEntitiesBySphere(center, radius, result.QueryEntityFoundCallback, result.FilterVehiclesOnly, EQueryEntitiesFlags.DYNAMIC);
+		
+		return result;
+    }
+	
+	static void GetRaytracePositions(array<vector> outPositions, IEntity target)
+	{
+		vector mins, maxs;
+		target.GetBounds(mins, maxs);
+		vector targetMat[4];
+		target.GetTransform(targetMat);
+		float quaternion[4];
+		Math3D.MatrixToQuat(targetMat, quaternion);
+
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(maxs[0] * 0.5, maxs[1] * 0.6, maxs[2] * 0.75)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(mins[0] * 0.5, maxs[1] * 0.6, maxs[2] * 0.75)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(maxs[0] * 0.5, maxs[1] * 0.1, maxs[2] * 0.75)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(mins[0] * 0.5, maxs[1] * 0.1, maxs[2] * 0.75)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(maxs[0] * 0.5, maxs[1] * 0.6, mins[2] * 0.75)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(maxs[0] * 0.5, maxs[1] * 0.1, mins[2] * 0.75)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(mins[0] * 0.5, maxs[1] * 0.1, mins[2] * 0.75)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(mins[0] * 0.5, maxs[1] * 0.6, mins[2] * 0.75)));
+
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(maxs[0] * 0.5, maxs[1] * 0.6, 0)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(maxs[0] * 0.5, maxs[1] * 0.1, 0)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(mins[0] * 0.5, maxs[1] * 0.1, 0)));
+		outPositions.Insert(targetMat[3] + SCR_Math3D.QuatMultiply(quaternion, Vector(mins[0] * 0.5, maxs[1] * 0.6, 0)));
+	}
+	
+	static void GetTargetScreenBorders(array<vector> worldPositions, int cameraIndex, float width, float height, out float x, out float y, out float w, out float h)
+	{
+		float minX, minY, maxX, maxY;
+		minX = width;
+		minY = height;
+		foreach (vector worldPosition : worldPositions)
+		{
+			vector screenPosition = GetGame().GetWorld().ProjectWorldToViewport(worldPosition, cameraIndex, width, height);
+			if (screenPosition[2] < 0)
+				return;
+			if (minX > screenPosition[0])
+				minX = screenPosition[0];
+			if (minY > screenPosition[1])
+				minY = screenPosition[1];
+			if (maxX < screenPosition[0])
+				maxX = screenPosition[0];
+			if (maxY < screenPosition[1])
+				maxY = screenPosition[1];
+		}
+
+		x = minX - 7;
+		y = minY;
+		w = maxX - minX + 22;
+		h = maxY - minY + 18;
+
+		x -= Math.Mod(x, 1.0);
+		y -= Math.Mod(y, 1.0);
+		w -= Math.Mod(w, 1.0);
+		h -= Math.Mod(h, 1.0);
+	}
+}
+
+class RVX_TargetQueryResult
+{
+	ref array<IEntity> targets = {};
+	IEntity fromEntity;
+
+	bool FilterVehiclesOnly(IEntity e)
+	{
+		return Vehicle.Cast(e) && e != fromEntity;
+	}
+
+	bool QueryEntityFoundCallback(IEntity e)
+	{
+		targets.Insert(e);
+		return true;
+	}
+}
+
+class RVX_FlirTarget
+{
+	IEntity entity;
+	float screenX;
+	float screenY;
+	float screenW;
+	float screenH;
+}

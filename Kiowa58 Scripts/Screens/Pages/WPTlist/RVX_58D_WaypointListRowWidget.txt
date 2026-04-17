@@ -1,0 +1,22 @@
+class RVX_58D_WaypointListRowWidget : SCR_ScriptedWidgetComponent
+{
+	void Init(RVX_WaypointData waypointData, bool isActive)
+	{	
+		TextWidget.Cast(m_wRoot.FindAnyWidget("WaypintIndex")).SetText("WP" + waypointData.waypointID);
+		TextWidget.Cast(m_wRoot.FindAnyWidget("WaypointPosition")).SetText(GetGridPos(waypointData.position));
+		TextWidget.Cast(m_wRoot.FindAnyWidget("WaypointElevation")).SetText(waypointData.position[1].ToString(3, 0) + "M");
+		FrameWidget.Cast(m_wRoot.FindAnyWidget("WaypointActive")).SetVisible(isActive);
+	}
+	
+	private string GetGridPos(vector position)
+	{
+		int gridX, gridY;
+		SCR_MapEntity.GetGridPos(position, gridX, gridY);		
+		return "GD-" + gridX.ToString(3) + "-" + gridY.ToString(3);
+	}
+	
+	Widget GetWidget()
+	{
+		return m_wRoot;
+	}
+}

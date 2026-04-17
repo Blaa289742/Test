@@ -1,0 +1,46 @@
+class RVX_FlirTargetsOverlayClass : ScriptGameComponentClass
+{
+
+}
+
+class RVX_FlirTargetsOverlay : ScriptGameComponent
+{
+	/*static const ResourceName flirTargetsLayout = "{AD169E26FDF199BB}UI/layouts/MFD_MMS_FLIR_TARGTE.layout";
+	private int cameraIndex = 10;
+	private ref map<IEntity, RHS_TargetRecognisionBox> flirTargetWidgetsMap = new map<IEntity, RVX_FlirTargetWidget>();
+	protected FrameWidget flirTargetsContainerWidget;
+	
+	override void OnPostInit(IEntity owner)
+	{
+		super.OnPostInit(owner);
+		flirTargetsContainerWidget = FrameWidget.Cast(m_wRoot.FindAnyWidget("FlirTargetsContainerWidget"));
+		SetEventMask(owner, EntityEvent.POSTFRAME);
+	}
+	
+	override protected void EOnPostFrame(IEntity owner, float timeSlice)
+    {
+		vector mat[4];
+		GetGame().GetWorld().GetCurrentCamera(mat);
+		GetGame().GetWorld().GetCamera(cameraIndex, mat);
+		
+		array<ref RVX_FlirTarget> targetList = {};
+		RVX_FlirTargetsProvider.GetTargetsData(cameraIndex, 658, 658, mat, owner, targetList);
+		
+		foreach (RVX_FlirTarget target : targetList)
+		{
+			RVX_FlirTargetWidget flirTargetWidget;
+			flirTargetWidgetsMap.Find(target.entity, flirTargetWidget);
+			if (!flirTargetWidget)
+			{
+				Widget targetWidget = m_wWorkspace.CreateWidgets(flirTargetsLayout, flirTargetsContainer);
+				flirTargetWidget = RVX_FlirTargetWidget.Cast(targetWidget.FindHandler(RVX_FlirTargetWidget));
+				flirTargetWidget.Init(target.entity, m_VehicleHullEntity);
+				flirTargetWidgetsMap.Insert(target.entity, flirTargetWidget);
+			}
+			recognisionBox.SetTransfrom(target.screenX, target.screenY, target.screenW, target.screenH);
+			//recognisionBox.SetFlag(currentTick);
+		}
+		// ForEach target create Widget if not exist in map, add to Map of Ientity:Widget, set correct transform
+		
+    }*/
+}

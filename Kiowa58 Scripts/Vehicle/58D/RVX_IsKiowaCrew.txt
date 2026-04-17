@@ -1,0 +1,20 @@
+//------------------------------------------------------------------------------------------------
+//! Returns true if current vehicle engine is on
+[BaseContainerProps()]
+class RVX_IsKiowaCrew : SCR_AvailableActionCondition
+{
+	//------------------------------------------------------------------------------------------------
+	override bool IsAvailable(SCR_AvailableActionsConditionData data)
+	{
+		if (!data)
+			return false;
+
+		IEntity entity = data.GetCurrentVehicle();
+		if (!entity)
+			return false;
+
+
+		RVX_58D_AircraftManagerComponent kiowaAircraftManager = RVX_58D_AircraftManagerComponent.Cast(entity.FindComponent(RVX_58D_AircraftManagerComponent));
+		return kiowaAircraftManager != null;
+	}
+};

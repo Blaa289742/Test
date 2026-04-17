@@ -1,0 +1,44 @@
+class RVX_58D_MFDButtonAction : ScriptedUserAction
+{
+	[Attribute(defvalue: "L1", desc: "Index of the MFD button (T1, T2 etc.")]
+	protected string buttonIndex;
+	
+	//------------------------------------------------------------------------------------------------
+	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
+	{		
+		RVX_MFD_Manager mfdManager = RVX_MFD_Manager.Cast(pOwnerEntity.FindComponent(RVX_MFD_Manager));
+		mfdManager.OnButtonPressed(buttonIndex);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool CanBeShownScript(IEntity user)
+	{
+		// See if character is in vehicle
+		ChimeraCharacter character = ChimeraCharacter.Cast(user);
+		if (!character)
+			return false;
+
+		// We cannot be pilot nor interior, if we are not seated in vehicle at all.
+		if (!character.IsInVehicle())
+			return false;
+
+		// See if character is in "this" (owner) vehicle
+		CompartmentAccessComponent compartmentAccess = character.GetCompartmentAccessComponent();
+		if (!compartmentAccess)
+			return false;
+		
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool CanBePerformedScript(IEntity user)
+	{
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool HasLocalEffectOnlyScript()
+	{
+		return false;
+	}
+}

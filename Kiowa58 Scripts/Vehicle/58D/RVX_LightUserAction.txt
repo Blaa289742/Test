@@ -1,0 +1,33 @@
+class RVX_LightUserAction : LightUserAction
+{
+	[Attribute("")]
+	protected string signalName;
+	
+	//------------------------------------------------------------------------------------------------
+	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
+	{
+		super.PerformAction(pOwnerEntity, pUserEntity);
+		
+		BaseLightManagerComponent lightManager = GetLightManager();
+		if (!lightManager)
+			return;
+
+		bool lightsState;
+				
+
+		lightsState = lightManager.GetLightsState(m_eLightType, m_iLightSide);
+		//
+		SignalsManagerComponent signalManager = SignalsManagerComponent.Cast(pOwnerEntity.FindComponent(SignalsManagerComponent));
+		int signalId = signalManager.AddOrFindSignal(signalName);
+		if (lightsState)
+		{
+			signalManager.SetSignalValue(signalId, 1);
+		} else 
+		{
+			signalManager.SetSignalValue(signalId, 0);
+		}
+		
+		Print("Signal Value: " + signalManager.GetSignalValue(signalId));
+		Print("Signal ID: " + signalId);
+	}
+}

@@ -1,0 +1,240 @@
+class RVX_WeaponInfoManagerClass : ScriptGameComponentClass
+{
+
+}
+
+class RVX_WeaponInfoManager : ScriptGameComponent
+{	
+	protected EventHandlerManagerComponent m_EventHandlerManager;
+	protected SlotManagerComponent slotManager;
+	protected RVX_58D_WCS_Armament_LoadoutComponent loadoutComponent;
+	protected RVX_MFD_Manager pageManager;
+	private RVXWeaponType currentWeaponType;
+	private int currentWeaponAmmoCount = 0;
+	private int curentWeaponMaxAmmoCount = 0;
+	private bool weaponFromLoadoutComponent = false;
+	private WeaponComponent gunWeaponSlot;
+	
+	override void OnPostInit(IEntity owner)
+    {
+        super.OnPostInit(owner);
+		m_EventHandlerManager = EventHandlerManagerComponent.Cast(owner.FindComponent(EventHandlerManagerComponent));
+		loadoutComponent = RVX_58D_WCS_Armament_LoadoutComponent.Cast(owner.FindComponent(RVX_58D_WCS_Armament_LoadoutComponent));
+		loadoutComponent.OnLoadoutChanged().Insert(ShowDefaultMFDPage);
+		
+		GetGame().GetCallqueue().CallLater(Init, 1000, false, owner);
+    }
+	
+	RVXWeaponType GetCurrentWeaponType()
+	{
+		return currentWeaponType;
+	}
+	
+	int GetCurrentWeaponAmmo()
+	{
+		if (currentWeaponType == RVXWeaponType.GUN)
+		{
+			return GetGunAmmo();
+		}
+		return loadoutComponent.GetCurrentGroupAmmoCount();
+	}
+	
+	ref KiowaPylons GetPylonsData()
+	{
+		array<WCS_Armament_WeaponComponent> weapons = loadoutComponent.GetAllWeapons();
+		ref array<ref KiowaPylonData> result = {};	
+		
+		ref KiowaPylons pylons = new KiowaPylons();
+		if (weapons.Count() > 0 && weapons[0])
+		{
+			pylons.leftPylon = GetPylonData(weapons[0]);
+		}
+		
+		if (weapons.Count() > 1 && weapons[1])
+		{
+			pylons.rightPylon = GetPylonData(weapons[1]);
+		}
+		return pylons;
+	}
+	
+	private ref KiowaPylonData GetPylonData(WCS_Armament_WeaponComponent wpn)
+	{
+		WCS_WeaponQueue queue = WCS_WeaponQueue.Cast(loadoutComponent.GetCurrentWeaponQueue());
+		ref KiowaPylonData pylonData = new KiowaPylonData();
+		if (!queue)
+			return pylonData;
+		
+		if (!queue.GetCurrentWeapon())
+			return pylonData;
+		
+		Projectile projectile = queue.GetCurrentWeapon().GetNextProjectile();		
+		
+		pylonData.weaponType = GetWeaponType(wpn.GetOwner());
+		pylonData.totalAmmoCount = wpn.GetMaxProjectileAmount();
+		pylonData.currentAmmoCount = wpn.GetCurrentProjectileAmount();
+		pylonData.pylonSelected = wpn.GetNextProjectile() && projectile && wpn.GetNextProjectile().GetID() == projectile.GetID();
+		return pylonData;
+	}
+	
+	private RVXWeaponType GetWeaponType(IEntity weaponEntity)
+	{
+		RVX_WeaponComponent weaponComponent = RVX_WeaponComponent.Cast(weaponEntity.FindComponent(RVX_WeaponComponent));
+		if (!weaponComponent)
+			return RVXWeaponType.None;
+		
+		return weaponComponent.GetWeaponType();;
+	}
+	
+	private void Init(IEntity owner)
+	{
+		slotManager = SlotManagerComponent.Cast(owner.FindComponent(SlotManagerComponent));
+		EntitySlotInfo mfdSlot = slotManager.GetSlotByName("MFD_R");
+		if(mfdSlot)
+		{
+			IEntity mfdEntity = mfdSlot.GetAttachedEntity();
+			pageManager = RVX_MFD_Manager.Cast(mfdEntity.FindComponent(RVX_MFD_Manager));
+		}
+		AddEventHandlers(owner);
+	}
+	
+	
+	private void AddEventHandlers(IEntity owner)
+	{
+		loadoutComponent.GetWCSWeaponManager().OnWeaponSlotIndexChanged().Insert(OnWeaponChanged);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	private void RemoveEventHandlers(IEntity owner)
+	{
+		loadoutComponent.GetWCSWeaponManager().OnWeaponSlotIndexChanged().Remove(OnWeaponChanged);
+	}
+	
+	private void OnWeaponChanged(int weaponSlotIndex)
+	{
+		BaseWeaponComponent weapon = loadoutComponent.GetWeaponManager().GetCurrentWeapon();
+		
+		WeaponComponent gunSlot = WeaponComponent.Cast(weapon);
+		ShowMFDWeaponPage();
+		
+		// For gun
+		
+		if(weapon && weapon.GetOwner() && weapon.GetOwner().ToString().Contains("M3M"))
+		{
+			IEntity weaponEntity = weapon.GetOwner();
+			//currentWeaponType = FetchCurrentWeaponType(weaponEntity);
+			currentWeaponType = GetWeaponType(weaponEntity);
+			weaponFromLoadoutComponent = false;
+			gunWeaponSlot = gunSlot;
+			return;
+		}
+		
+		
+		// For WCS weapons
+		array<WCS_Armament_WeaponComponent> weapons = {};
+		weapons = loadoutComponent.GetCurrentGroupWeapons();
+		Print("RVX_DEBUG: currentWeapons: " + weapons);
+		
+		WCS_Armament_WeaponComponent armament = weapons[0];
+		
+		IEntity entity = armament.GetOwner();
+		currentWeaponType = GetWeaponType(entity);
+		weaponFromLoadoutComponent = true;
+	}	
+	
+	int selectedAGMDeliveryMode = KiowaAGMDeliveryMode.DIR;
+	void CycleAGMDeliveryMode()
+	{
+		selectedAGMDeliveryMode++;
+		if (selectedAGMDeliveryMode > 2)
+			selectedAGMDeliveryMode = KiowaAGMDeliveryMode.DIR;
+		
+		array<WCS_Armament_WeaponComponent> weapons = loadoutComponent.GetCurrentGroupWeapons();
+		foreach(WCS_Armament_WeaponComponent wpn: weapons)
+		{
+			WCS_ProjectilesQueue projectileQue = wpn.GetProjectileQueue();
+			ref array<ref WCS_ProjectileInfo> projectileInfos = projectileQue.GetProjectilesInfo();
+			
+			foreach(WCS_ProjectileInfo projectileInfo: projectileInfos)
+			{
+				if (!projectileInfo || !projectileInfo.projectile)
+					continue;
+				WCS_Armament_FlightComputerComponent flightComputer = WCS_Armament_FlightComputerComponent.Cast(projectileInfo.projectile.FindComponent(WCS_Armament_FlightComputerComponent));
+				flightComputer.SetDeliveryMode(selectedAGMDeliveryMode);
+			}
+		}
+	}
+	
+	string GetCurrentDeliveryMode()
+	{
+		switch(selectedAGMDeliveryMode)
+		{
+			case KiowaAGMDeliveryMode.DIR: return "DIR"; break;
+			case KiowaAGMDeliveryMode.LO: return "LOAL"; break;
+			case KiowaAGMDeliveryMode.HI: return "LOBL"; break;
+		}
+		return "";
+	}
+	
+	private string FetchCurrentWeaponType(IEntity armament)
+	{
+		RVX_WeaponComponent weaponComponent = RVX_WeaponComponent.Cast(armament.FindComponent(RVX_WeaponComponent));
+		if (weaponComponent)
+		{
+			return weaponComponent.GetWeaponID();
+		}		
+		return "";
+	}
+	
+	private void ShowMFDWeaponPage()
+	{
+		if(pageManager)
+		{
+			pageManager.SetCurrentPageName("WPN_VSD");
+		}
+	}
+	
+	private void ShowDefaultMFDPage()
+	{
+		if(pageManager)
+		{
+			pageManager.SetCurrentPageName("VSD");
+		}
+	}
+	
+	private int GetGunAmmo()
+	{
+		if (!gunWeaponSlot || !gunWeaponSlot.GetCurrentMagazine())
+			return 0;
+		
+		return gunWeaponSlot.GetCurrentMagazine().GetAmmoCount();
+	}
+
+}
+
+class KiowaPylons
+{
+	ref KiowaPylonData leftPylon; 
+	ref KiowaPylonData rightPylon; 
+	
+	void KiowaPylons()
+	{
+		leftPylon = new KiowaPylonData();
+		rightPylon = new KiowaPylonData();
+	}
+}
+
+class KiowaPylonData
+{
+	string pylonName;
+	RVXWeaponType weaponType;
+	int totalAmmoCount;
+	int currentAmmoCount;
+	bool pylonSelected;
+}
+
+enum KiowaAGMDeliveryMode
+{
+	DIR,
+	HI,
+	LO
+}

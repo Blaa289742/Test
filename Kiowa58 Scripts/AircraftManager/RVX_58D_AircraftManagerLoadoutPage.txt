@@ -1,0 +1,236 @@
+class RVX_58D_AircraftManagerLoadoutPage
+{	
+	static const ResourceName weaponPylonIcons = "{4C304FB98B7CA1E9}UI/textures/AircraftManager/58D_pylon_weapons.imageset";
+	
+	private Widget root;
+	private FrameWidget loadoutComponentDisabled;
+	private XComboBoxWidget leftPylonCombo;
+	private XComboBoxWidget rightPylonCombo;
+	private ImageWidget pylonLeft;
+	private ImageWidget pylonRight;
+	private ImageWidget m3mOnPylon;
+	private ImageWidget helicopterIcon;
+	private FrameWidget laserCodeContainer;
+	private XComboBoxWidget digit2Combo;
+	private XComboBoxWidget digit3Combo;
+	private XComboBoxWidget digit4Combo;
+	private TextWidget codeTextWidget;
+	
+	private FrameWidget loadoutPageContainer;
+	private FrameWidget loadoutPageContainerDisabled;
+	
+	// map<code, label>
+	//private ref map<string, string> availableWeapons = new map<string, Tuple2<int, string>>();
+	private ref array<string> availableWeapons = {};
+	private ref array<string> availableWeaponNames = {};
+	private ref array<string> availableWeaponsLeftPylon = {};
+	private ref array<string> availableWeaponsRightPylon = {};
+	
+	private string laserCode = "1688";
+	private bool isSupportVehicleNearby = false;
+	
+	IEntity vehicleEntity;
+	
+	//Components
+	private RVX_58D_AircraftManagerComponent aircraftManager;
+	private RVX_58D_WCS_Armament_LoadoutComponent loadoutManager;
+	private RVX_LaserSeeker rktLaserSeeker;
+	
+	void Init(Widget rootWidget)
+	{
+		root = rootWidget;
+		PreloadWidgets(root);
+		PreloadComponents();
+		AddButtonListeners(root);
+	}
+	
+	void Update()
+	{
+		if (vehicleEntity)
+		{
+			UpdatePylonIcons();
+			UpdateLaserCodeContainer();
+		}
+	}
+	
+	void Save()
+	{
+		if (!isSupportVehicleNearby)
+			return;
+		SaveLoadout();
+		SaveRKTLaserCode();
+	}
+	
+	private void PreloadWidgets(Widget root)
+	{
+		loadoutComponentDisabled = FrameWidget.Cast(root.FindAnyWidget("LoadoutPageContainerDisabled"));
+		leftPylonCombo = XComboBoxWidget.Cast(root.FindAnyWidget("PylonLeftCombo"));
+		rightPylonCombo = XComboBoxWidget.Cast(root.FindAnyWidget("PylonRightCombo"));
+		loadoutPageContainer = FrameWidget.Cast(root.FindAnyWidget("LoadoutPageContainer"));
+		loadoutPageContainerDisabled = FrameWidget.Cast(root.FindAnyWidget("LoadoutPageContainerDisabled"));
+		pylonLeft = ImageWidget.Cast(root.FindAnyWidget("LeftPylon"));
+		pylonLeft.LoadImageFromSet(0, weaponPylonIcons, "RVX_AGM114K");
+		pylonLeft.LoadImageFromSet(1, weaponPylonIcons, "RVX_DAGR");
+		pylonLeft.LoadImageFromSet(2, weaponPylonIcons, "RVX_M260");
+		pylonRight = ImageWidget.Cast(root.FindAnyWidget("RightPylon"));
+		pylonRight.LoadImageFromSet(0, weaponPylonIcons, "RVX_AGM114K");
+		pylonRight.LoadImageFromSet(1, weaponPylonIcons, "RVX_DAGR");
+		pylonRight.LoadImageFromSet(2, weaponPylonIcons, "RVX_M260");
+		m3mOnPylon = ImageWidget.Cast(root.FindAnyWidget("M3M"));
+		laserCodeContainer = FrameWidget.Cast(root.FindAnyWidget("APKWS_Laser_Code_Container"));
+		digit2Combo = XComboBoxWidget.Cast(root.FindAnyWidget("LaserCodeDigit2Combo"));
+		digit3Combo = XComboBoxWidget.Cast(root.FindAnyWidget("LaserCodeDigit3Combo"));
+		digit4Combo = XComboBoxWidget.Cast(root.FindAnyWidget("LaserCodeDigit4Combo"));
+		codeTextWidget = TextWidget.Cast(root.FindAnyWidget("Code"));
+		
+	}
+	
+	private void PreloadComponents()
+	{
+		PlayerController playerController = GetGame().GetPlayerController();
+		IEntity player = playerController.GetControlledEntity();
+		if(playerController && player.GetParent())
+		{
+			IEntity vehicle = player.GetParent();
+			vehicleEntity = vehicle;
+			aircraftManager = RVX_58D_AircraftManagerComponent.Cast(vehicle.FindComponent(RVX_58D_AircraftManagerComponent));
+			loadoutManager = RVX_58D_WCS_Armament_LoadoutComponent.Cast(vehicle.FindComponent(RVX_58D_WCS_Armament_LoadoutComponent));
+			rktLaserSeeker = RVX_LaserSeeker.FindLaserSeeekerByID(vehicle, "RKT");
+			
+			CheckIsSupportStationNearby();
+			PreloadCurrentLaserCode();
+			FillAvailableWeapons();
+			SelectCurrentWeapons();
+		}
+	}
+	
+	private void AddButtonListeners(Widget root)
+	{
+		
+	}
+	
+	private void PreloadCurrentLaserCode()
+	{
+		laserCode = rktLaserSeeker.GetCode();
+		digit2Combo.SetCurrentItem(laserCode.Substring(1, 1).ToInt() - 1);
+		digit3Combo.SetCurrentItem(laserCode.Substring(2, 1).ToInt() - 1);
+		digit4Combo.SetCurrentItem(laserCode.Substring(3, 1).ToInt() - 1);
+	}
+	
+	private void CheckIsSupportStationNearby()
+	{
+		array<SCR_BaseSupportStationComponent> supportStations = {};
+		auto manager = SCR_SupportStationManagerComponent.GetInstance();
+		manager.GetStations(ESupportStationType.RESUPPLY_AMMO, supportStations);
+		bool isInRange = false;
+		
+		foreach(SCR_BaseSupportStationComponent station: supportStations)
+		{
+			if (vector.Distance(station.GetPosition(), vehicleEntity.GetOrigin()) < 15)
+			{
+				isInRange = true;
+			}
+		}
+		//loadoutPageContainer.SetVisible(isInRange);
+		loadoutPageContainerDisabled.SetVisible(!isInRange);
+		isSupportVehicleNearby = isInRange;
+	}
+	
+	private void FillAvailableWeapons()
+	{
+		availableWeapons.Insert("RVX_AGM114K");
+		availableWeapons.Insert("RVX_RKT");
+		availableWeapons.Insert("RVX_APKWS");
+		availableWeapons.Insert("RVX_DAGR");
+		
+		availableWeaponNames.Insert("2x AGM-114K Hellfire (Laser Guided)");
+		availableWeaponNames.Insert("M260 HE Unguided Rockets");
+		availableWeaponNames.Insert("APKWS M260 (Laser Guided)");
+		availableWeaponNames.Insert("DAGR 2.75 inch Guided Rockets");
+		
+		availableWeaponsRightPylon.InsertAll(availableWeapons);
+		availableWeaponsLeftPylon.InsertAll(availableWeapons);
+		availableWeaponsLeftPylon.Insert("RVX_M3M");
+		
+		for (int i = 0; i < availableWeaponNames.Count(); i++)
+		{			
+			leftPylonCombo.AddItem(availableWeaponNames.Get(i));
+			rightPylonCombo.AddItem(availableWeaponNames.Get(i));
+		}
+		leftPylonCombo.AddItem("M-3P 50cal");
+	}
+	
+	private void SelectCurrentWeapons()
+	{
+		if (!loadoutManager)
+			return;
+		auto currentWeapons = loadoutManager.GetCurrentPylonConfig();
+		for (int i = 0; i < availableWeaponNames.Count(); i++)
+		{			
+			if (availableWeaponsLeftPylon.Get(i) == currentWeapons.leftPylonWeaponCode)
+				leftPylonCombo.SetCurrentItem(i);
+			
+			if (availableWeaponsRightPylon.Get(i) == currentWeapons.rightPylonWeaponCode)
+				rightPylonCombo.SetCurrentItem(i);
+		}
+		if (currentWeapons.leftPylonWeaponCode == "RVX_M3M")
+		{
+			leftPylonCombo.SetCurrentItem(availableWeapons.Count() + 1);
+		}
+	}
+	
+////// Updates per frame	
+	private void UpdatePylonIcons()
+	{
+		if (availableWeapons.Count() < 1)
+			return;
+		
+		if (leftPylonCombo.GetCurrentItem() >= availableWeapons.Count())
+		{
+			pylonLeft.SetVisible(false);
+			m3mOnPylon.SetVisible(true);
+		} else {
+			pylonLeft.SetVisible(true);
+			pylonLeft.LoadImageFromSet(0, weaponPylonIcons, availableWeapons.Get(leftPylonCombo.GetCurrentItem()));
+			m3mOnPylon.SetVisible(false);
+		}
+		pylonRight.LoadImageFromSet(0, weaponPylonIcons, availableWeapons.Get(rightPylonCombo.GetCurrentItem()));
+	}
+	
+	private void UpdateLaserCodeContainer()
+	{
+		string leftWeapon = availableWeaponsLeftPylon.Get(leftPylonCombo.GetCurrentItem());
+		string rightWeapon = availableWeaponsRightPylon.Get(rightPylonCombo.GetCurrentItem());
+		if (leftWeapon == "RVX_APKWS" || rightWeapon == "RVX_APKWS")
+			laserCodeContainer.SetVisible(true);
+		else
+			laserCodeContainer.SetVisible(false);
+		
+		laserCode = GetLaserCode();
+		codeTextWidget.SetText(laserCode);
+	}
+	
+	private string GetLaserCode()
+	{
+		return "1" + (digit2Combo.GetCurrentItem() + 1) + (digit3Combo.GetCurrentItem() + 1) + (digit4Combo.GetCurrentItem() + 1);
+	}
+	
+////// Save handlers
+	private void SaveLoadout()
+	{
+		ref RVX_58D_PylonWeaponConfig config = new RVX_58D_PylonWeaponConfig();
+		if (leftPylonCombo.GetCurrentItem() == availableWeapons.Count())
+		{
+			config.leftPylonWeaponCode = "RVX_M3M";
+		} else {
+			config.leftPylonWeaponCode = availableWeapons.Get(leftPylonCombo.GetCurrentItem());	
+		}
+		config.rightPylonWeaponCode = availableWeapons.Get(rightPylonCombo.GetCurrentItem());
+		loadoutManager.SetWeapons(config);
+	}
+	
+	private void SaveRKTLaserCode()
+	{
+		rktLaserSeeker.SetLaserCode(laserCode);
+	}
+}

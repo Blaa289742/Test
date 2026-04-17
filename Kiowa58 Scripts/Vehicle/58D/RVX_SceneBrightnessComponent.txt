@@ -1,0 +1,22 @@
+[ComponentEditorProps(category: "GameScripted/Misc", description: "")]
+class RVX_SceneBrightnessComponentClass : SCR_CollimatorSightsComponentClass
+{
+};
+
+class RVX_SceneBrightnessComponent : SCR_CollimatorSightsComponent
+{
+	
+	private float brightness = 0;
+	
+	float getBrightness()
+	{
+		return brightness;
+	}
+	
+	override void UpdateReticleBrightness(float lvFactor, bool useOwn)
+	{
+		brightness = lvFactor;
+		super.UpdateReticleBrightness(lvFactor, useOwn);
+	}
+	
+}

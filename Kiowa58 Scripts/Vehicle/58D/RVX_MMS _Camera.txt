@@ -1,0 +1,857 @@
+class RVX_MMS_CameraClass : ScriptGameComponentClass
+{
+
+}
+
+class RVX_MMS_Camera : ScriptGameComponent
+{
+    [Attribute("30", UIWidgets.Auto, "Camera FOV at Zoom level 0", "Camera")]
+    protected float cameraFOV1;
+
+    [Attribute("15", UIWidgets.Auto, "Camera FOV at Zoom level 1", "Camera")]
+    protected float cameraFOV2;
+
+    [Attribute("7", UIWidgets.Auto, "Camera FOV at Zoom level 2", "Camera")]
+    protected float cameraFOV3;
+
+    [Attribute("3", UIWidgets.Auto, "Camera FOV at Zoom level 3", "Camera")]
+    protected float cameraFOV4;
+
+
+	[Attribute("1.2", UIWidgets.Auto, "Camera FOV at Zoom level 3", "Camera")]
+    protected float cameraFOV5;
+
+	[Attribute("2", UIWidgets.Auto, "Camera Traverse at Zoom level 0", "Camera")]
+    protected float cameraFOV1MoveRate;
+
+	[Attribute("1", UIWidgets.Auto, "Camera Traverse at Zoom level 1", "Camera")]
+    protected float cameraFOV2MoveRate;
+
+	[Attribute("0.5", UIWidgets.Auto, "Camera Traverse at Zoom level 2", "Camera")]
+    protected float cameraFOV3MoveRate;
+
+	[Attribute("0.25", UIWidgets.Auto, "Camera Traverse at Zoom level 3", "Camera")]
+    protected float cameraFOV4MoveRate;
+	
+	[Attribute("35", UIWidgets.Auto, "Camera vertical up limit", "Camera")]
+    protected float cameraVerticalUpLimit;
+	
+	[Attribute("-30", UIWidgets.Auto, "Camera vertical down limit", "Camera")]
+    protected float cameraVerticalDownLimit;	
+	
+	
+    protected float cameraAcceleration = 0.005;
+
+
+	[Attribute("0.04", UIWidgets.Auto, "Camera Traverse at Zoom level 4", "Camera")]
+    protected float cameraFOV5MoveRate;
+
+    [Attribute("7000", UIWidgets.Auto)]
+    protected float maxRaycastDistanceForCameraStabilization;
+
+	[Attribute("false", UIWidgets.Auto, "Enable debug lines (MMS line of sight)", "Debug")]
+    protected bool enableDebug;
+
+	[Attribute(desc: "What compartments can use MMS")]
+	protected ref array<string> m_aCompartmentsNames;
+
+
+	// MMS (Camera) related
+	protected GenericEntity camera;
+	protected int cameraIndex = 10;
+
+	protected IEntity vehicle;
+	protected TNodeId mmsPos;
+	protected TNodeId mmsDir;
+	protected TNodeId aircraftFWD;
+	protected SignalsManagerComponent m_VehicleSignals;
+
+	protected vector mmsStartMat[4];
+	protected vector mmsEndMat[4];
+	protected vector aircraftMat[4];
+	protected vector mmsOrigin;
+	protected vector mmsStart;
+	protected vector mmsEnd;
+	protected vector mmsCameraDir;
+	protected vector aircraftFWDPos;;
+	protected vector targetPosition;
+
+	protected int mmsXSignal;
+	protected int mmsYSignal;
+
+	protected float cameraVerticalOrientation = 0;
+	protected float cameraHorizontalOrientation = 0;
+	protected bool cameraStabilized = false;
+	protected bool cameraStabilizedOnEntity = false;
+	protected IEntity cameraStabilizedEntity;
+	protected bool targetLocked;
+	protected int currentZoomLevel = 1;
+	protected float cameraRotStep = 2;
+	protected float distanceToTarget = -1;
+
+	protected ref array<ref Shape> m_aDebugShapes = {};
+	protected int i = 0;
+	protected float m_fTargetCheckInterval = (1000/30) * 0.001; // 30fps
+	protected float m_fTargetCheckIntervalTimer = float.MAX;
+	protected bool mmsControlKeyPressed = false;
+	
+	protected bool isActive = false;
+
+	protected int visionMode = 0; // 0 = NORM, 1 = WHOT, 2 = BHOT
+
+	ref Diag_Material_Util DiagMaterialUtil;
+	protected static ref RVX_FLIR_Util flirUtil = RVX_FLIR_Util.getInstance();
+	
+	private RVX_LaserDesignatorComponent laserDesignator;
+	
+	private ref array<RVX_58D_MFDBasePage> mmsDisplayedOn = {};
+
+	int GetCurrentZoomLevel()
+	{
+		return currentZoomLevel;
+	}
+
+	int GetMMSDistanceToTarget()
+	{
+		if(!IsStabilized())
+			return 9999;
+
+		UpdateMMSVectors();
+		auto mmsDirection = camera.GetYawPitchRoll().AnglesToVector();
+		RaycastResult result = RayCastFromCamera(mmsDirection);
+		return result.distance * maxRaycastDistanceForCameraStabilization;
+	}
+
+	bool IsStabilized()
+	{
+		return cameraStabilized;
+	}
+	
+	bool IsPointTrack()
+	{
+		return cameraStabilizedOnEntity;
+	}
+
+	vector GetMMSCameraAimDirection()
+	{
+		return mmsCameraDir.AnglesToVector();
+	}
+
+	vector GetMMSCameraOrigin()
+	{
+		return mmsStart;
+	}
+
+	vector GetMMSAngles()
+	{
+		return Vector(-cameraHorizontalOrientation, cameraVerticalOrientation, 0);
+	}
+	
+	void AddDisplayedOn(RVX_58D_MFDBasePage page)
+	{
+		mmsDisplayedOn.Insert(page);
+	}
+	
+	void RemoveDisplayedOn(RVX_58D_MFDBasePage page)
+	{
+		mmsDisplayedOn.RemoveItem(page);
+	}
+	
+	bool IsMMSDisplayedOnAnyPage()
+	{
+		return mmsDisplayedOn.Count() > 0;
+	}
+
+	override void OnPostInit(IEntity owner)
+    {
+        super.OnPostInit(owner);
+		GetGame().GetCallqueue().CallLater(Init, 1000, false, owner);
+    }
+	
+	private void Init(IEntity owner)
+	{
+		vehicle = owner;
+		m_VehicleSignals = SignalsManagerComponent.Cast(vehicle.GetParent().FindComponent(SignalsManagerComponent));
+		mmsXSignal = m_VehicleSignals.AddOrFindMPSignal("MMS_X", 0.01, 0.5);
+		mmsYSignal = m_VehicleSignals.AddOrFindMPSignal("MMS_Y", 0.01, 0.5);
+		laserDesignator = RVX_LaserDesignatorComponent.Cast(vehicle.FindComponent(RVX_LaserDesignatorComponent));
+
+		if(!m_VehicleSignals)
+		{
+			Print("RVX_MFDBaseScreen: Vehicle SignalManagerComponent not found", LogLevel.ERROR);
+			return;
+		}
+		DiagMaterialUtil = new Diag_Material_Util("");
+	}
+	
+	void StartFrameListener()
+	{
+		SetEventMask(GetOwner(), EntityEvent.POSTFRAME);
+	}
+	
+	void StopFrameListener()
+	{
+		ClearEventMask(GetOwner(), EntityEvent.POSTFRAME);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	void OnDestroyed()
+	{
+		DeleteCamera();
+
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraUp", EActionTrigger.PRESSED, PilotCameraUp);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraDown", EActionTrigger.PRESSED, PilotCameraDown);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraLeft", EActionTrigger.PRESSED, PilotCameraLeft);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraRight", EActionTrigger.PRESSED, PilotCameraRight);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraZoom", EActionTrigger.DOWN, PilotCameraZoomCycle);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraVisionMode", EActionTrigger.DOWN, ToggleOverlay);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraLock", EActionTrigger.DOWN, PilotCameraLock);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraForward", EActionTrigger.DOWN, PilotCameraForward);
+		
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraUp", EActionTrigger.UP, OnKeyUp);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraDown", EActionTrigger.UP, OnKeyUp);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraLeft", EActionTrigger.UP, OnKeyUp);
+		GetGame().GetInputManager().RemoveActionListener("PilotCameraRight", EActionTrigger.UP, OnKeyUp);
+	}
+	
+	void DeleteCamera()
+	{
+		if (camera)
+		{
+			IEntity cameraParent = camera.GetParent();
+			if (cameraParent)
+				cameraParent.RemoveChild(camera);
+
+			delete camera;
+		}
+	}
+	
+	float cameraRotStepValue = 0.01;
+	private void OnKeyUp()
+	{
+		cameraRotStepValue = 0.01;
+		mmsControlKeyPressed = false;
+	}
+
+	//------------------------------------------------------------------------------------------------
+    void Initialize()
+    {
+		if (!IsVehicleCrew())
+			return;
+		
+		Print("MMS: Initialized");
+		flirUtil.SetFLIROwnerEntity(vehicle);
+		flirUtil.SetCameraOverlay(CameraVisionMode.TV, cameraIndex);
+		
+		if(vehicle)
+		{
+			GetGame().GetInputManager().AddActionListener("PilotCameraUp", EActionTrigger.PRESSED, PilotCameraUp);
+			GetGame().GetInputManager().AddActionListener("PilotCameraDown", EActionTrigger.PRESSED, PilotCameraDown);
+			GetGame().GetInputManager().AddActionListener("PilotCameraLeft", EActionTrigger.PRESSED, PilotCameraLeft);
+			GetGame().GetInputManager().AddActionListener("PilotCameraRight", EActionTrigger.PRESSED, PilotCameraRight);
+			GetGame().GetInputManager().AddActionListener("PilotCameraZoom", EActionTrigger.DOWN, PilotCameraZoomCycle);
+			GetGame().GetInputManager().AddActionListener("PilotCameraVisionMode", EActionTrigger.DOWN, ToggleOverlay);
+			GetGame().GetInputManager().AddActionListener("PilotCameraLock", EActionTrigger.DOWN, PilotCameraLock);
+			GetGame().GetInputManager().AddActionListener("PilotCameraForward", EActionTrigger.DOWN, PilotCameraForward);
+			
+			GetGame().GetInputManager().AddActionListener("PilotCameraUp", EActionTrigger.UP, OnKeyUp);
+			GetGame().GetInputManager().AddActionListener("PilotCameraDown", EActionTrigger.UP, OnKeyUp);
+			GetGame().GetInputManager().AddActionListener("PilotCameraLeft", EActionTrigger.UP, OnKeyUp);
+			GetGame().GetInputManager().AddActionListener("PilotCameraRight", EActionTrigger.UP, OnKeyUp);
+			mmsXSignal = m_VehicleSignals.AddOrFindMPSignal("MMS_X", 0.01, 0.5);
+			mmsYSignal = m_VehicleSignals.AddOrFindMPSignal("MMS_Y", 0.01, 0.5);
+			mmsPos = vehicle.GetBoneIndex("v_mms_dir");
+			mmsDir = vehicle.GetBoneIndex("v_mms_dir");
+			aircraftFWD = vehicle.GetBoneIndex("v_mms_fwd");
+		}
+		
+		DeleteCamera();
+		StartCamera();
+		isActive = true;
+    }
+
+	void OnFrame(float timeSlice)
+	{	
+		if (IsMMSDisplayedOnAnyPage()) flirUtil.UpdateCamera(timeSlice);
+		if(!m_VehicleSignals) return;
+		if (!camera) return;
+		
+
+		UpdateCamera();
+		if(cameraStabilized)
+		{
+			StabilizeMMS();
+		}
+
+		if(enableDebug)
+		{
+			DiagMaterialUtil.update();
+		}
+	}
+	
+	override protected void EOnPostFrame(IEntity owner, float timeSlice)
+    {
+		OnFrame(timeSlice);
+    }
+
+
+	// Remote -------------------------------------------------------------------------
+	void OnReceiveUpdateCameraData(float vertical, float horizontal, bool stabilized, vector stabilizeTargetPos, int zoomLevel, vector mmsStartReceived, vector mmsDirReceived)
+	{
+		if(mmsControlKeyPressed)
+		{
+			return;
+		}
+		cameraVerticalOrientation = GetLimitAdjustedVerticalOrientation(vertical);
+		cameraHorizontalOrientation = horizontal;
+		cameraStabilized = stabilized;
+		targetPosition = stabilizeTargetPos;
+		m_VehicleSignals.SetSignalValue(mmsXSignal, cameraHorizontalOrientation);
+		m_VehicleSignals.SetSignalValue(mmsYSignal, cameraVerticalOrientation);
+		mmsStart = mmsStartReceived;
+		mmsCameraDir = mmsDirReceived;
+		
+		currentZoomLevel = zoomLevel;
+		UpdateCameraZoom();
+		UpdateCamera();
+	}
+	
+	private bool IsOwner()
+	{
+		RplComponent rplComponent = RplComponent.Cast(GetOwner().FindComponent(RplComponent));
+		return (rplComponent && rplComponent.IsOwner());
+	}
+
+	void SendRemoteUpdate()
+	{
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		RplId creatorId = RplComponent.Cast(GetOwner().FindComponent(RplComponent)).Id();
+       	SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(player);
+		character.UpdateMMSData(creatorId, cameraVerticalOrientation, cameraHorizontalOrientation, cameraStabilized, targetPosition, currentZoomLevel, mmsStart, camera.GetYawPitchRoll());
+	}
+
+	// !Remote -------------------------------------------------------------------------
+
+	// Pilot camera controls -------------------------------------------------------------------------
+	protected void PilotCameraUp()
+	{
+		if (!camera) return;
+		
+		cameraStabilizedOnEntity = false;
+		mmsControlKeyPressed = true;
+		if(cameraStabilized)
+		{
+			targetLocked = false;
+			cameraStabilized = false;
+			cameraStabilizedEntity = null;
+			UpdateRotationY(true);
+			UpdateCamera();
+			GetCameraTargetPos();
+			cameraStabilized = true;
+			SendRemoteUpdate();
+		} else
+		{
+			UpdateRotationY(true);
+			UpdateCamera();
+			SendRemoteUpdate();
+		}
+	}
+
+	protected void PilotCameraDown()
+	{
+		if (!camera) return;
+		
+		cameraStabilizedOnEntity = false;
+		mmsControlKeyPressed = true;
+		if(cameraStabilized)
+		{
+			targetLocked = false;
+			cameraStabilized = false;
+			cameraStabilizedEntity = null;
+			UpdateRotationY(false);
+			UpdateCamera();
+			GetCameraTargetPos();
+			cameraStabilized = true;
+			SendRemoteUpdate();
+		} else
+		{
+			UpdateRotationY(false);
+			UpdateCamera();
+			SendRemoteUpdate();
+		}
+	}
+
+	protected void PilotCameraLeft()
+	{
+		if (!camera) return;
+		
+		cameraStabilizedOnEntity = false;
+		mmsControlKeyPressed = true;
+		if(cameraStabilized)
+		{
+			targetLocked = false;
+			cameraStabilized = false;
+			cameraStabilizedEntity = null;
+			UpdateRotationX(true);
+			UpdateCamera();
+			GetCameraTargetPos();
+			cameraStabilized = true;
+			SendRemoteUpdate();
+		} else
+		{
+			UpdateRotationX(true);
+			UpdateCamera();
+			SendRemoteUpdate();
+		}
+	}
+
+	protected void PilotCameraRight()
+	{
+		if (!camera) return;
+		
+		cameraStabilizedOnEntity = false;
+		mmsControlKeyPressed = true;
+		if(cameraStabilized)
+		{
+			targetLocked = false;
+			cameraStabilized = false;
+			cameraStabilizedEntity = null;
+			UpdateRotationX(false);
+			UpdateCamera();
+			GetCameraTargetPos();
+			cameraStabilized = true;
+			SendRemoteUpdate();
+		} else
+		{
+			UpdateRotationX(false);
+			UpdateCamera();
+			SendRemoteUpdate();
+		}
+	}
+	
+	private void UpdateRotationX(bool rotateLeft)
+	{
+		
+		cameraRotStepValue = Math.Lerp(cameraRotStepValue, cameraRotStep, cameraAcceleration);
+		if (rotateLeft)
+			cameraHorizontalOrientation += cameraRotStepValue;
+		else 
+			cameraHorizontalOrientation -= Math.Lerp(cameraRotStepValue, cameraRotStepValue, cameraAcceleration);
+		m_VehicleSignals.SetSignalValue(mmsXSignal, cameraHorizontalOrientation);
+	}
+	
+	private void UpdateRotationY(bool rotateUp)
+	{
+		cameraRotStepValue = Math.Lerp(cameraRotStepValue, cameraRotStep, cameraAcceleration);
+		if (rotateUp)
+			cameraVerticalOrientation += cameraRotStepValue;
+		else 
+			cameraVerticalOrientation -= cameraRotStepValue;
+		
+		cameraVerticalOrientation = GetLimitAdjustedVerticalOrientation(cameraVerticalOrientation);
+		m_VehicleSignals.SetSignalValue(mmsYSignal, cameraVerticalOrientation);
+	}
+
+	protected void PilotCameraZoomCycle()
+	{
+		if (!camera) return;
+		currentZoomLevel += 1;
+
+		UpdateCameraZoom();
+		SendRemoteUpdate();
+	}
+
+	protected void PilotCameraLock()
+	{
+		if (!camera) return;
+		cameraStabilized = !cameraStabilized;
+		if(cameraStabilized)
+		{
+			GetCameraTargetPos(true);
+		} else
+		{
+			targetLocked = false;
+			cameraStabilizedOnEntity = false;
+			distanceToTarget = -1;
+		}
+		SendRemoteUpdate();
+	}
+
+	protected void PilotCameraForward()
+	{
+		if (!camera) return;
+
+		cameraStabilized = false;
+		targetLocked = false;
+		cameraStabilizedOnEntity = false;
+		targetPosition = {};
+		distanceToTarget = -1;
+
+		cameraHorizontalOrientation = 0;
+		cameraVerticalOrientation = 0;
+		m_VehicleSignals.SetSignalValue(mmsXSignal, cameraHorizontalOrientation);
+		m_VehicleSignals.SetSignalValue(mmsYSignal, cameraVerticalOrientation);
+		SendRemoteUpdate();
+	}
+	
+	// !Pilot camera controls -------------------------------------------------------------------------
+	
+	protected void UpdateCameraZoom()
+	{
+		if (!IsVehicleCrew())
+			return;
+		
+		float fov;
+		if (currentZoomLevel > 5)
+		{
+			currentZoomLevel = 1;
+		}
+		switch (currentZoomLevel)
+		{
+			case 1:
+			{
+				fov = cameraFOV1;
+				cameraRotStep = cameraFOV1MoveRate;
+				break;
+			}
+			case 2:
+			{
+				fov = cameraFOV2;
+				cameraRotStep = cameraFOV2MoveRate;
+				break;
+			}
+			case 3:
+			{
+				fov = cameraFOV3;
+				cameraRotStep = cameraFOV3MoveRate;
+				break;
+			}
+			case 4:
+			{
+				fov = cameraFOV4;
+				cameraRotStep = cameraFOV4MoveRate;
+				break;
+			}
+			case 5:
+			{
+				fov = cameraFOV5;
+				cameraRotStep = cameraFOV5MoveRate;
+				break;
+			}
+		}
+
+		GetGame().GetWorld().SetCameraVerticalFOV(cameraIndex, fov);
+	}
+
+	private void GetCameraTargetPos(bool tryPointLock = false)
+	{
+		if(targetLocked || !camera)
+		{
+			return;
+		}
+		// Initial update of vectors (before per-frame)
+		UpdateMMSVectors();
+		vector mmsDirection = camera.GetYawPitchRoll().AnglesToVector();
+		RaycastResult traceResult = RayCastFromCamera(mmsDirection);
+
+		targetPosition = mmsStart + (mmsDirection * 15) + (mmsDirection * maxRaycastDistanceForCameraStabilization * traceResult.distance);
+		targetLocked = true;
+
+		//Shape targetSphere = Shape.CreateSphere(Color.RED, ShapeFlags.DEFAULT, targetPosition, 3);
+		//m_aDebugShapes.Insert(targetSphere);
+		//m_aDebugShapes.Remove(0);
+	}
+	
+	private Vehicle IsVehicle(IEntity entity)
+	{
+		if (!entity)
+			return null;
+		Vehicle isVehicle = Vehicle.Cast(entity);
+		IEntity parent = entity.GetParent();
+		if (parent)
+		{
+			return Vehicle.Cast(parent);
+		}
+		return Vehicle.Cast(entity);
+	}
+
+	protected void UpdateCamera()
+	{
+		if (!camera) return;
+		
+		if (!IsVehicleCrew())
+			return;
+		
+		camera.SetYawPitchRoll(Vector(-cameraHorizontalOrientation, cameraVerticalOrientation, 0));
+		GetGame().GetWorld().SetCameraFarPlane(cameraIndex, GetGame().GetViewDistance());
+	}
+
+	protected void StabilizeMMS()
+	{
+		UpdateMMSVectors();
+		RotateCamToTarget(targetPosition);
+	}
+
+	private void RotateCamToTarget(vector targetPos)
+	{
+		if (targetPos == {})
+			return;
+		
+		
+		vector transform[4];
+		camera.GetTransform(transform);
+
+		vector rotationMatrix[4];
+		SCR_Math3D.LookAt(mmsStart, targetPos, vector.Up, rotationMatrix);
+
+		float quat[4];
+		Math3D.MatrixToQuat(rotationMatrix, quat);
+
+		vector currentAngles = camera.GetYawPitchRoll();
+		vector angles = Math3D.QuatToAngles(quat);
+
+		Math3D.AnglesToMatrix(angles, transform);
+		camera.SetTransform(transform);
+
+		vector mmsDirection = camera.GetYawPitchRoll().AnglesToVector();
+		vector mmsDiff = camera.GetLocalYawPitchRoll();
+
+		// Rotate model
+		cameraHorizontalOrientation = -mmsDiff[0];
+		cameraVerticalOrientation = GetLimitAdjustedVerticalOrientation(mmsDiff[1]);
+		m_VehicleSignals.SetSignalValue(mmsXSignal, cameraHorizontalOrientation);
+		m_VehicleSignals.SetSignalValue(mmsYSignal, cameraVerticalOrientation);
+		camera.SetYawPitchRoll(Vector(-cameraHorizontalOrientation, cameraVerticalOrientation, 0));
+
+
+		if (enableDebug)
+		{
+			////// DEBUG LINES /////////
+			m_aDebugShapes.Clear();
+			Shape forwardShape = Shape.Create(ShapeType.LINE, ARGB(255, 0, 255, 0), ShapeFlags.NOZBUFFER, mmsStart, mmsStart + mmsDirection * 1550);
+			m_aDebugShapes.Insert(forwardShape);
+
+			Shape desiredMmsDirShape = Shape.Create(ShapeType.LINE, ARGB(255, 0, 255, 0), ShapeFlags.NOZBUFFER,  mmsStart, targetPos);
+			m_aDebugShapes.Insert(desiredMmsDirShape);
+
+			vector mmsVector = camera.GetYawPitchRoll().AnglesToVector();
+			Shape mmsDirShape = Shape.Create(ShapeType.LINE, ARGB(255, 0, 0, 0), ShapeFlags.NOZBUFFER,  mmsStart, mmsStart + mmsDirection * 1550);
+			m_aDebugShapes.Insert(mmsDirShape);
+			////// DEBUG LINES /////////
+		}
+	}
+
+	protected vector GetYawPitchRoll(vector vectorA, vector vectorB)
+    {
+        vector normA = vectorA.Normalized();
+        vector normB = vectorB.Normalized();
+        float yaw = Math.Atan2(normB[0], normB[2]) - Math.Atan2(normA[0], normA[2]);
+        float pitch = Math.Asin(normB[1]) - Math.Asin(normA[1]);
+        vector cross = normA * normB;
+        float roll = Math.Atan2(cross[1], cross[2]);
+        yaw = -yaw * Math.RAD2DEG;
+        pitch = -pitch * Math.RAD2DEG;
+        roll = roll * Math.RAD2DEG;
+        return Vector(yaw, pitch, roll);
+    }
+
+	private void UpdateMMSVectors()
+	{
+		vehicle.GetBoneMatrix(mmsPos, mmsStartMat);
+		vehicle.GetBoneMatrix(mmsDir, mmsEndMat);
+		vehicle.GetBoneMatrix(aircraftFWD, aircraftMat);
+		mmsStart = vehicle.CoordToParent(mmsStartMat[3]);
+		mmsEnd = vehicle.CoordToParent(mmsEndMat[3]);
+		aircraftFWDPos = vehicle.CoordToParent(aircraftMat[3]);
+	}
+
+	private RaycastResult RayCastFromCamera(vector direction)
+	{
+		autoptr TraceParam param = new TraceParam;
+		param.LayerMask = EPhysicsLayerDefs.Projectile;
+		param.Exclude = vehicle;
+		param.Flags = TraceFlags.ENTS | TraceFlags.VISIBILITY | TraceFlags.WORLD | TraceFlags.OCEAN;
+		param.Start = mmsStart + (direction * 15);
+		param.End = mmsStart + (direction * maxRaycastDistanceForCameraStabilization);
+
+		auto distance = GetGame().GetWorld().TraceMove(param, null);
+		
+		return new RaycastResult(distance, param.TraceEnt);
+	}
+
+	private void StartCamera()
+	{
+		if(!vehicle)
+			return;
+		
+		if (!IsVehicleCrew())
+			return;
+
+		TNodeId boneID = vehicle.GetAnimation().GetBoneIndex("v_mms_dir");
+		vector mat[4];
+		vehicle.GetAnimation().GetBoneMatrix(boneID, mat);
+
+
+		float viewDistance = GetGame().GetViewDistance();
+		camera = CreatePIPCameraOld(vehicle, mat[3], cameraIndex, cameraFOV1, 1, 8000);
+		
+		laserDesignator.SetCameraEntity(camera);
+		if (!camera)
+		{
+			Print("Could not create PIP camera!", LogLevel.ERROR);
+			return;
+		}
+		flirUtil.SetCameraOverlay(CameraVisionMode.TV, cameraIndex);
+	}
+
+	// ScriptCamera is faster, updates run faster
+	private ScriptCamera CreatePIPCameraOld(IEntity parent, vector position, int index, float fov, float nearPlane, float farPlane)
+	{
+		// Spawn camera
+		BaseWorld baseWorld = parent.GetWorld();
+		ScriptCamera pipCamera = ScriptCamera.Cast(GetGame().SpawnEntity(ScriptCamera, baseWorld));
+
+		vector mat[4];
+		Math3D.MatrixIdentity3(mat);
+		mat[3] = position;
+
+
+		pipCamera.SetTransform(mat);
+		pipCamera.Index = index;
+		pipCamera.FreeFly = false;
+
+		baseWorld.SetCameraVerticalFOV(index, fov);
+		baseWorld.SetCameraFarPlane(index, farPlane);
+		baseWorld.SetCameraNearPlane(index, nearPlane);
+		baseWorld.SetCameraType(index, CameraType.PERSPECTIVE);
+
+		parent.AddChild(pipCamera, -1, EAddChildFlags.AUTO_TRANSFORM);
+		return pipCamera;
+	}
+	
+	private SCR_PIPCamera CreatePIPCamera(IEntity parent, vector position, int index, float fov, float nearPlane, float farPlane)
+	{
+		// Spawn camera
+		BaseWorld baseWorld = parent.GetWorld();
+		EntitySpawnParams params = new EntitySpawnParams();
+		SCR_PIPCamera pipCamera = SCR_PIPCamera.Cast(GetGame().SpawnEntity(SCR_PIPCamera, baseWorld, params));
+
+		vector mat[4];
+		Math3D.MatrixIdentity3(mat);
+		mat[3] = position;
+
+
+		pipCamera.SetTransform(mat);
+		pipCamera.SetCameraIndex(index);
+		pipCamera.SetFOVDegree(fov);
+		pipCamera.SetFarPlane(farPlane);
+		pipCamera.SetNearPlane(nearPlane);
+		parent.AddChild(pipCamera, -1, EAddChildFlags.AUTO_TRANSFORM);
+		pipCamera.UpdatePIPCamera(1.0);
+		return pipCamera;
+	}
+
+	/////////////////////////// Overlay ///////////////////////////////
+
+	void ToggleOverlay()
+	{
+		if (!IsVehicleCrew())
+			return;
+		
+		visionMode++;
+		if (visionMode > 2)
+		{
+			visionMode = 0;
+		}
+
+		switch (visionMode)
+		{
+			case 0: flirUtil.SetCameraOverlay(CameraVisionMode.TV, cameraIndex); break;
+			case 1: flirUtil.SetCameraOverlay(CameraVisionMode.WHOT, cameraIndex); break;
+			case 2: flirUtil.SetCameraOverlay(CameraVisionMode.BHOT, cameraIndex); break;
+		}
+	}
+
+	int GetVisionMode()
+	{
+		return visionMode;
+	}
+	
+	bool IsVehicleCrew()
+	{
+		if (!GetGame().GetPlayerController())
+			return false;
+		
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		if (!player)
+			return false;
+		
+		IEntity playerVehicle = player.GetParent();
+		IEntity vehicleEnt = GetOwner().GetParent();
+		
+		if(!playerVehicle)
+			return false;
+		
+		if(!vehicle)
+			return false;
+		
+		return playerVehicle.GetID() == vehicleEnt.GetID();
+	}
+	
+	private float GetLimitAdjustedVerticalOrientation(float angle)
+	{
+		if(angle > 0)
+			return Math.Min(angle, cameraVerticalUpLimit);
+		else 
+			return Math.Max(angle, cameraVerticalDownLimit);
+	}
+
+	private SCR_ChimeraCharacter GetSyncUpdater()
+	{
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		RplId creatorId = RplComponent.Cast(player.FindComponent(RplComponent)).Id();
+       	SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(player);
+		return character;
+	}
+
+}
+
+class RaycastResult
+{
+	float distance;
+	IEntity targetEntity;
+	
+	void RaycastResult(float dist, IEntity entity)
+	{
+		distance = dist;
+		targetEntity = entity;
+	}
+}
+
+
+modded class SCR_ChimeraCharacter
+{
+	void UpdateMMSData(RplId helicopterId, float vertical, float horizontal, bool stabilized, vector targetPos, int zoomLevel, vector mmsStart, vector mmsDir)
+    {
+        Rpc(RpcAsk_UpdateMMSData, helicopterId, vertical, horizontal, stabilized, targetPos, zoomLevel, mmsStart, mmsDir);
+    }
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+    private void RpcAsk_UpdateMMSData(RplId helicopterId, float vertical, float horizontal, bool stabilized, vector targetPos, int zoomLevel, vector mmsStart, vector mmsDir)
+    {
+		RpcAsk_BroadcastUpdateMMSData(helicopterId, vertical, horizontal, stabilized, targetPos, zoomLevel, mmsStart, mmsDir);
+		Rpc(RpcAsk_BroadcastUpdateMMSData, helicopterId, vertical, horizontal, stabilized, targetPos, zoomLevel, mmsStart, mmsDir);
+    }
+
+	[RplRpc(RplChannel.Reliable, RplRcver.Broadcast)]
+    private void RpcAsk_BroadcastUpdateMMSData(RplId helicopterId, float vertical, float horizontal, bool stabilized, vector targetPos, int zoomLevel, vector mmsStart, vector mmsDir)
+    {
+       	RplComponent comp = RplComponent.Cast(Replication.FindItem(helicopterId));
+		if(comp)
+		{
+			IEntity vehicle = comp.GetEntity();
+			RVX_MMS_Camera cameraComp = RVX_MMS_Camera.Cast(vehicle.FindComponent(RVX_MMS_Camera));
+			cameraComp.OnReceiveUpdateCameraData(vertical, horizontal, stabilized, targetPos, zoomLevel, mmsStart, mmsDir);
+		}
+    }
+}

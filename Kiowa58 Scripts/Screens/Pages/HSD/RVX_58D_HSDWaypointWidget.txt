@@ -1,0 +1,44 @@
+class RVX_58D_HSDWaypointWidget : SCR_ScriptedWidgetComponent
+{
+    protected Widget widget;
+    protected TextWidget waypointIDWidget;
+	
+	private int iconWidth = 80;
+	private int iconHeight = 45;
+	
+    override void HandlerAttached(Widget w)
+    {
+        super.HandlerAttached(w);
+        widget = w;
+        waypointIDWidget = TextWidget.Cast(w.FindAnyWidget("WaypointID"));
+    }
+	
+	Widget GetWidget()
+	{
+		return widget;
+	}
+	
+	void SetWaypointID(string i)
+    {
+		string index = TernaryString(i.ToInt() < 10, "0" + i, i);
+		waypointIDWidget.SetText(index);
+    }
+
+    void SetScreenPos(float x, float y)
+    {
+        float centerX = 62.5;
+        float centerY = 22.5;
+		FrameSlot.SetPos(widget, x - centerX, y - centerY);
+        FrameSlot.SetSize(widget, iconWidth, iconHeight);
+    }
+	
+	float GetPosX()
+	{
+		return FrameSlot.GetPosX(widget) + 62.5;
+	}
+	
+	float GetPosY()
+	{
+		return FrameSlot.GetPosY(widget) + 22.5;
+	}
+}

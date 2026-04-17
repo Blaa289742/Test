@@ -1,0 +1,99 @@
+[BaseContainerProps()]
+class RVX_CMWS : RVX_58D_MFDBasePage
+{		
+	TextWidget flareCountWidget;
+	FrameWidget quadrantTL;
+	FrameWidget quadrantTR;
+	FrameWidget quadrantBL;
+	FrameWidget quadrantBR;
+	
+	ImageWidget quadrantTLImage;
+	ImageWidget quadrantTRImage;
+	ImageWidget quadrantBLImage;
+	ImageWidget quadrantBRImage;
+	
+	WCS_Armament_DispenserManagerComponent dispenserManager;
+	WCS_Armament_MWSComponent mwsComponent;
+		
+	// Override in MFD page
+	override ResourceName GetTemplate()
+	{
+		return "{4F8D664AE483AC54}UI/layouts/MFD_CMWS.layout";
+	}
+	
+	// Override in MFD page
+	override void UpdateDisplay(float timeSlice)
+    {
+		if (dispenserManager)
+		{
+			flareCountWidget.SetText(dispenserManager.GetCurrentProjectileAmount(WCS_Armament_FlareDispenserComponent).ToString());
+		}
+    }
+
+    override protected void PreloadWidgets()
+    {
+       	super.PreloadWidgets();
+		flareCountWidget = TextWidget.Cast(m_wRoot.FindAnyWidget("FlareCount"));
+		quadrantTL = FrameWidget.Cast(m_wRoot.FindAnyWidget("Quadrant_TL"));
+		quadrantTR = FrameWidget.Cast(m_wRoot.FindAnyWidget("Quadrant_TR"));
+		quadrantBL = FrameWidget.Cast(m_wRoot.FindAnyWidget("Quadrant_BL"));
+		quadrantBR = FrameWidget.Cast(m_wRoot.FindAnyWidget("Quadrant_BR"));
+		
+		quadrantTLImage = ImageWidget.Cast(m_wRoot.FindAnyWidget("Quadrant_TL_Image"));
+		quadrantTRImage = ImageWidget.Cast(m_wRoot.FindAnyWidget("Quadrant_TR_Image"));
+		quadrantBLImage = ImageWidget.Cast(m_wRoot.FindAnyWidget("Quadrant_BL_Image"));
+		quadrantBRImage = ImageWidget.Cast(m_wRoot.FindAnyWidget("Quadrant_BR_Image"));
+		
+		SetWidgetAsBlinking(quadrantTLImage);
+		SetWidgetAsBlinking(quadrantTRImage);
+		SetWidgetAsBlinking(quadrantBLImage);
+		SetWidgetAsBlinking(quadrantBRImage);
+    }
+	
+	override protected void PreloadComponents()
+    {
+       	super.PreloadComponents();
+		dispenserManager = Inject<WCS_Armament_DispenserManagerComponent>.Get(GetOwner());
+		mwsComponent = Inject<WCS_Armament_MWSComponent>.Get(GetOwner());
+		if (mwsComponent)
+		{
+			mwsComponent.GetOnMissileLaunchDetected().Insert(OnMissileDetected)
+		}
+    }
+
+	
+	private void OnMissileDetected(vector missilePosition, EWCS_Armament_MWSThreatSize threatSize)
+	{
+		float missileDir = GetMissileDirection(missilePosition);
+		quadrantTR.SetVisible(missileDir > 345 || missileDir < 105);
+		quadrantBR.SetVisible(missileDir > 75 && missileDir < 195);
+		quadrantBL.SetVisible(missileDir > 165 && missileDir < 285);
+		quadrantTL.SetVisible(missileDir > 255 || missileDir < 15);
+		GetGame().GetCallqueue().CallLater(HideQuadrants, 2500, false);
+	}
+	
+	private void HideQuadrants()
+	{
+		quadrantTR.SetVisible(false);
+		quadrantBR.SetVisible(false);
+		quadrantBL.SetVisible(false);
+		quadrantTL.SetVisible(false);
+	}
+	
+	private float GetMissileDirection(vector missilePosition)
+	{
+		vector direction = vector.Direction(GetOwner().GetOrigin(), missilePosition).Normalized();;
+		vector angles = GetOwner().GetYawPitchRoll();
+		return NormalizeAngle360((direction.VectorToAngles() - angles)[0]);
+	}
+	
+	private float NormalizeAngle360(float angle)
+	{
+	    angle = Math.Mod(angle, 360.0);
+	
+	    if (angle < 0)
+	        angle += 360.0;
+	
+	    return angle;
+	}
+}

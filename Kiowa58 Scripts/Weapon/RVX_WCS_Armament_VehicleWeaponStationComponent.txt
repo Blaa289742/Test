@@ -1,0 +1,81 @@
+class RVX_WCS_Armament_VehicleWeaponStationComponentClass :  WCS_Armament_VehicleWeaponStationComponentClass {}
+
+class RVX_WCS_Armament_VehicleWeaponStationComponent : WCS_Armament_VehicleWeaponStationComponent
+{
+	[Attribute("false", UIWidgets.Auto, "Enable debug lines (Weapon target lines)", "Debug")]
+    protected bool enableDebug;
+	
+	RVX_WeaponInfoManager weaponManager;
+	RVX_LaserSeeker laserSeekerAGM;
+	RVX_LaserSeeker laserSeekerRKT;
+	
+	protected ref array<ref Shape> m_aDebugShapes = {};
+	protected ref array<ref Shape> m_aDebugLines = {};
+	//------------------------------------------------------------------------------------------------
+	override protected void OnPostInit(IEntity owner)
+	{
+		super.OnPostInit(owner);
+		weaponManager = RVX_WeaponInfoManager.Cast(owner.FindComponent(RVX_WeaponInfoManager));
+		laserSeekerAGM = RVX_LaserSeeker.FindLaserSeeekerByID(owner, "AGM");
+		laserSeekerRKT = RVX_LaserSeeker.FindLaserSeeekerByID(owner, "RKT");
+	}
+	//------------------------------------------------------------------------------------------------
+	override vector GetAimDirection()
+	{
+		if (IsProjectileSeekerAGM() && laserSeekerAGM && laserSeekerAGM.IsLaserTargetFound())
+		{
+			vector targetDir = laserSeekerAGM.GetDirectionToLaserTarget().AnglesToVector();
+			if (enableDebug)
+			{
+				m_aDebugLines.Clear();
+				Shape line = Shape.Create(ShapeType.LINE, ARGB(255, 0, 255, 0), ShapeFlags.NOZBUFFER, GetAimOrigin(), GetAimOrigin() + targetDir * 2000);
+				m_aDebugLines.Insert(line);
+			}
+			return targetDir;
+		}
+		
+		if (IsProjectileSeekerRKT() && laserSeekerRKT && laserSeekerRKT.IsLaserTargetFound())
+		{
+			vector targetDir = laserSeekerRKT.GetDirectionToLaserTarget().AnglesToVector();
+			if (enableDebug)
+			{
+				m_aDebugLines.Clear();
+				Shape line = Shape.Create(ShapeType.LINE, ARGB(255, 0, 255, 0), ShapeFlags.NOZBUFFER, GetAimOrigin(), GetAimOrigin() + targetDir * 2000);
+				m_aDebugLines.Insert(line);
+			}
+			return targetDir;
+		}
+	
+		return Vector(0,0,0);
+	}
+	
+	//------------------------------------------------------------------------------------------------
+	override vector GetAimOrigin()
+	{
+		if (IsProjectileSeekerAGM() && laserSeekerAGM && laserSeekerAGM.IsLaserTargetFound())
+		{
+			return laserSeekerAGM.GetLaserSeekerOrigin();
+		}
+		
+		if (IsProjectileSeekerRKT() && laserSeekerRKT && laserSeekerRKT.IsLaserTargetFound())
+		{
+			return laserSeekerRKT.GetLaserSeekerOrigin();
+		}
+			
+		return Vector(0,0,0);
+	}
+	
+	private bool IsProjectileSeekerAGM()
+	{
+		string text;
+		Debug.DumpStack(text);
+		return text.Contains("RVX_AGM_WCS_Armament_LaserSeekerComponent"); 
+	}
+	
+	private bool IsProjectileSeekerRKT()
+	{
+		string text;
+		Debug.DumpStack(text);
+		return text.Contains("RVX_RKT_WCS_Armament_LaserSeekerComponent"); 
+	}
+}

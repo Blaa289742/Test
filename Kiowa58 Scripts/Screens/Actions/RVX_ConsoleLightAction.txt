@@ -1,0 +1,60 @@
+class RVX_ConsoleLightAction : ScriptedUserAction
+{
+	protected bool enabled = false;
+	
+	//------------------------------------------------------------------------------------------------
+	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
+	{
+		SlotManagerComponent slotManagerComponent = SlotManagerComponent.Cast(pOwnerEntity.FindComponent(SlotManagerComponent));
+		EntitySlotInfo slot = slotManagerComponent.GetSlotByName("Cockpit_Emissive");
+		IEntity markings = slot.GetAttachedEntity();
+		
+		ParametricMaterialInstanceComponent material = ParametricMaterialInstanceComponent.Cast(markings.FindComponent(ParametricMaterialInstanceComponent));
+		SignalsManagerComponent signalManager = SignalsManagerComponent.Cast(pOwnerEntity.FindComponent(SignalsManagerComponent));
+		int consoleLightSignal = signalManager.AddOrFindSignal("console_light");
+		
+		
+		enabled = !enabled;
+		if(enabled)
+		{
+			material.SetEmissiveMultiplier(4);
+			signalManager.SetSignalValue(consoleLightSignal, 1);
+		} else 
+		{
+			material.SetEmissiveMultiplier(0);
+			signalManager.SetSignalValue(consoleLightSignal, 0);
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool CanBeShownScript(IEntity user)
+	{
+		// See if character is in vehicle
+		ChimeraCharacter character = ChimeraCharacter.Cast(user);
+		if (!character)
+			return false;
+
+		// We cannot be pilot nor interior, if we are not seated in vehicle at all.
+		if (!character.IsInVehicle())
+			return false;
+
+		// See if character is in "this" (owner) vehicle
+		CompartmentAccessComponent compartmentAccess = character.GetCompartmentAccessComponent();
+		if (!compartmentAccess)
+			return false;
+		
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool CanBePerformedScript(IEntity user)
+	{
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool HasLocalEffectOnlyScript()
+	{
+		return false;
+	}
+}

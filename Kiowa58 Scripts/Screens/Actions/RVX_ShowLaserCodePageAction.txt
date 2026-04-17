@@ -1,0 +1,44 @@
+class RVX_ShowLaserCodePageAction : ScriptedUserAction
+{	
+	//------------------------------------------------------------------------------------------------
+	override void PerformAction(IEntity pOwnerEntity, IEntity pUserEntity)
+	{		
+		SlotManagerComponent slotManager = SlotManagerComponent.Cast(pOwnerEntity.FindComponent(SlotManagerComponent));
+		EntitySlotInfo slotInfo = slotManager.GetSlotByName("MFD_L");
+		IEntity mfd = slotInfo.GetAttachedEntity();
+		RVX_MFD_Manager mfdPageManager = RVX_MFD_Manager.Cast(mfd.FindComponent(RVX_MFD_Manager));
+		mfdPageManager.SetCurrentPageName("LASER_CODES");
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool CanBeShownScript(IEntity user)
+	{
+		// See if character is in vehicle
+		ChimeraCharacter character = ChimeraCharacter.Cast(user);
+		if (!character)
+			return false;
+
+		// We cannot be pilot nor interior, if we are not seated in vehicle at all.
+		if (!character.IsInVehicle())
+			return false;
+
+		// See if character is in "this" (owner) vehicle
+		CompartmentAccessComponent compartmentAccess = character.GetCompartmentAccessComponent();
+		if (!compartmentAccess)
+			return false;
+		
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool CanBePerformedScript(IEntity user)
+	{
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override bool HasLocalEffectOnlyScript()
+	{
+		return false;
+	}
+}

@@ -1,0 +1,14 @@
+[BaseContainerProps()]
+class RVX_RFD : RVX_58D_MFDBasePage
+{		
+	// Override in MFD page
+	override ResourceName GetTemplate()
+	{
+		return "{95AF12E9FB42D3D0}UI/layouts/MFD_RFD.layout";
+	}
+
+    override protected void PreloadWidgets()
+    {
+        super.PreloadWidgets();
+    }
+}

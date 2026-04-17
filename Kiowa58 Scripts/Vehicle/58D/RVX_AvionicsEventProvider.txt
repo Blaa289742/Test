@@ -1,0 +1,345 @@
+class RVX_AvionicsEventProviderClass : ScriptGameComponentClass
+{
+
+}
+
+class RVX_AvionicsEventProvider : ScriptGameComponent
+{
+	[Attribute(desc: "What compartments should trigger events")]
+	protected ref array<string> m_aCompartmentsNames;
+	
+	protected IEntity ownerEntity;
+	private bool avionicsActive = false;
+	
+	override void OnPostInit(IEntity owner)
+    {
+        super.OnPostInit(owner);
+		ownerEntity = owner;
+		RegisterHandlers();
+		GetGame().GetCallqueue().CallLater(AddOnPlayerControlledChanged, 1500, false);
+    }
+	
+	protected void AddOnPlayerControlledChanged()
+	{
+		SCR_PlayerController playerController = SCR_PlayerController.Cast(GetGame().GetPlayerController());
+		playerController.m_OnControlledEntityChanged.Insert(OnPlayerControlledChanged);
+	}
+	
+	protected void OnPlayerControlledChanged(IEntity from, IEntity to)
+	{
+		IEntity playerCurrentVehicle = to.GetParent();
+		if (!playerCurrentVehicle)
+			return;
+		
+		if (playerCurrentVehicle.GetID() == GetOwner().GetID())
+		{
+			GetGame().GetCallqueue().CallLater(OnActivated, 1500, false);
+		} else
+		{
+			OnDeactivated();
+		}
+	}
+	
+	protected void RegisterHandlers()
+	{
+		UnRegisterHandlers();
+		if(!ownerEntity)
+			return;
+		
+		EventHandlerManagerComponent eventHandler = EventHandlerManagerComponent.Cast(ownerEntity.FindComponent(EventHandlerManagerComponent));
+		if (eventHandler)
+		{
+			eventHandler.RegisterScriptHandler("OnCompartmentEntered", this, OnCompartmentEntered);
+			eventHandler.RegisterScriptHandler("OnCompartmentLeft", this, OnCompartmentLeft);
+			eventHandler.RegisterScriptHandler("OnDestroyed", this, OnDestroyed, false);
+		}
+		
+		VehicleControllerComponent vehicleController = VehicleControllerComponent.Cast(ownerEntity.FindComponent(VehicleControllerComponent));
+		if (vehicleController)
+		{
+			vehicleController.GetOnEngineStart().Insert(CheckCurrentOccupants);
+		}
+	}
+	
+	protected void CheckCurrentOccupants()
+	{
+		BaseCompartmentManagerComponent mgr = BaseCompartmentManagerComponent.Cast(ownerEntity.FindComponent(BaseCompartmentManagerComponent));
+		if (!mgr)
+			return;
+	
+		PlayerController playerController = GetGame().GetPlayerController();
+		if (!playerController)
+			return;
+	
+		IEntity localPlayer = playerController.GetControlledEntity();
+		if (!localPlayer)
+			return;
+	
+		array<BaseCompartmentSlot> compartments = {};
+		mgr.GetCompartments(compartments);
+	
+		foreach (BaseCompartmentSlot slot : compartments)
+		{
+			if (!slot)
+				continue;
+	
+			IEntity occupant = slot.GetOccupant();
+			if (!occupant)
+				continue;
+	
+			if (occupant != localPlayer)
+				continue;
+	
+			if (!m_aCompartmentsNames.Contains(slot.GetCompartmentUniqueName()))
+				continue;
+	
+			GetGame().GetCallqueue().CallLater(OnActivated, 500, false);
+	
+			SCR_BaseGameMode gameMode = SCR_BaseGameMode.Cast(GetGame().GetGameMode());
+			if (gameMode)
+				gameMode.GetOnPlayerKilled().Insert(OnPlayerDied);
+			
+			
+			VehicleControllerComponent vehicleController = VehicleControllerComponent.Cast(ownerEntity.FindComponent(VehicleControllerComponent));
+			if (vehicleController)
+			{
+				vehicleController.GetOnEngineStart().Remove(CheckCurrentOccupants);
+			}
+	
+			break;
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void UnRegisterHandlers()
+	{
+		if(!ownerEntity)
+			return;
+		
+		EventHandlerManagerComponent eventHandler = EventHandlerManagerComponent.Cast(ownerEntity.FindComponent(EventHandlerManagerComponent));
+		if (eventHandler)
+		{
+			eventHandler.RemoveScriptHandler("OnCompartmentEntered", this, OnCompartmentEntered);
+			eventHandler.RemoveScriptHandler("OnCompartmentLeft", this, OnCompartmentLeft);
+			eventHandler.RemoveScriptHandler("OnDestroyed", this, OnDestroyed, false);
+		}
+		
+		VehicleControllerComponent vehicleController = VehicleControllerComponent.Cast(ownerEntity.FindComponent(VehicleControllerComponent));
+		if (vehicleController)
+		{
+			vehicleController.GetOnEngineStart().Remove(CheckCurrentOccupants);
+		}
+	}
+	
+	//------------------------------------------------------------------------------------------------
+	protected void OnCompartmentEntered(IEntity vehicle, BaseCompartmentManagerComponent mgr, IEntity occupant, int managerId, int slotID)
+	{
+		BaseCompartmentSlot compart = mgr.FindCompartment(slotID, managerId);
+		if (IsLocalEntity(occupant) && compart && m_aCompartmentsNames.Contains(compart.GetCompartmentUniqueName()))
+		{
+			GetGame().GetCallqueue().CallLater(OnActivated, 500, false);
+
+			SCR_BaseGameMode gameMode = SCR_BaseGameMode.Cast(GetGame().GetGameMode());
+			if (gameMode)
+				gameMode.GetOnPlayerKilled().Insert(OnPlayerDied);
+			
+			VehicleControllerComponent vehicleController = VehicleControllerComponent.Cast(ownerEntity.FindComponent(VehicleControllerComponent));
+			if (vehicleController)
+			{
+				vehicleController.GetOnEngineStart().Remove(CheckCurrentOccupants);
+			}
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void OnCompartmentLeft(IEntity vehicle, BaseCompartmentManagerComponent mgr, IEntity occupant, int managerId, int slotID)
+	{
+		BaseCompartmentSlot compart = mgr.FindCompartment(slotID, managerId);
+
+		if (IsLocalEntity(occupant) && compart && m_aCompartmentsNames.Contains(compart.GetCompartmentUniqueName()))
+		{
+			OnDestroyed();
+		}
+		ResetFLIR();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void OnPlayerDied(notnull SCR_InstigatorContextData instigatorContextData)
+	{
+		if (instigatorContextData.GetVictimPlayerID() != SCR_PlayerController.GetLocalPlayerId())
+			return;
+
+		OnDestroyed();
+		UnRegisterHandlers();
+		ResetFLIR();
+
+		SCR_BaseGameMode gameMode = SCR_BaseGameMode.Cast(GetGame().GetGameMode());
+		if (gameMode)
+			gameMode.GetOnPlayerKilled().Remove(OnPlayerDied);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void OnDestroyed()
+	{
+		OnDeactivated();
+	}
+	
+	//------------------------------------------------------------------------------------------------
+	protected bool IsLocalEntity(notnull IEntity ent)
+	{
+		PlayerController playerController = GetGame().GetPlayerController();
+
+		return playerController && playerController.GetControlledEntity() == ent;
+	}
+	
+	
+	//------------------------------------------------------------------------------------------------
+	protected void OnActivated()
+	{
+		if (avionicsActive)
+		{
+			return;
+		}
+		EnableScreenHandlers();
+		ActivateMMSCamera();
+		ActivateLaserDesignator();
+		ActivateLaserSeeker();
+		RegiterMissileCamera();
+		avionicsActive = true;
+	}
+	
+	//------------------------------------------------------------------------------------------------
+	protected void OnDeactivated()
+	{
+		if (!avionicsActive)
+		{
+			return;
+		}
+		DisableScreenHandlers();
+		DeactivateMMSCamera();
+		DeactivateLaserDesignator();
+		DeactivateLaserSeeker();
+		UnregisterMissileCamera();
+		avionicsActive = false;
+	}
+	
+	private void EnableScreenHandlers()
+	{
+		// Activate screens
+		ref array<RVX_MFD_Manager> pageManagers = {};
+		IEntity child = ownerEntity.GetChildren();
+		while (child)
+		{
+			if (child.FindComponent(RVX_MFD_Manager))
+				pageManagers.Insert(RVX_MFD_Manager.Cast(child.FindComponent(RVX_MFD_Manager)));
+			
+			child = child.GetSibling();
+		}
+		
+		foreach (RVX_MFD_Manager pageManager : pageManagers)
+		{
+			pageManager.StartFrameListener();
+		}
+		
+		// Activate HMD (temporary)
+		RVX_HMD hmd = RVX_HMD.Cast(ownerEntity.FindComponent(RVX_HMD));
+		hmd.StartHMD();
+	}
+	
+	private void ResetFLIR()
+	{
+		RVX_FLIR_Util flirUtil = RVX_FLIR_Util.getInstance();
+		flirUtil.SetTargetThermalOff();
+	}
+	
+	private void ActivateMMSCamera()
+	{
+		SlotManagerComponent slotManager = SlotManagerComponent.Cast(ownerEntity.FindComponent(SlotManagerComponent));
+		EntitySlotInfo slotInfo = slotManager.GetSlotByName("MMS");
+		RVX_MMS_Camera mmsCamera = RVX_MMS_Camera.Cast(slotInfo.GetAttachedEntity().FindComponent(RVX_MMS_Camera));
+		mmsCamera.Initialize();
+		mmsCamera.StartFrameListener();
+	}
+	
+	private void RegiterMissileCamera()
+	{
+		RVX_MissileCameraComponent camera = Inject<RVX_MissileCameraComponent>.Get(GetOwner());
+		camera.Register();
+	}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////	
+	private void DeactivateMMSCamera()
+	{
+		SlotManagerComponent slotManager = SlotManagerComponent.Cast(ownerEntity.FindComponent(SlotManagerComponent));
+		EntitySlotInfo slotInfo = slotManager.GetSlotByName("MMS");
+		RVX_MMS_Camera mmsCamera = RVX_MMS_Camera.Cast(slotInfo.GetAttachedEntity().FindComponent(RVX_MMS_Camera));
+		mmsCamera.StopFrameListener();
+		mmsCamera.OnDestroyed();
+	}
+	
+	private void DisableScreenHandlers()
+	{
+		// Deactivate screens
+		ref array<RVX_MFD_Manager> pageManagers = {};
+		IEntity child = ownerEntity.GetChildren();
+		while (child)
+		{
+			if (child.FindComponent(RVX_MFD_Manager))
+				pageManagers.Insert(RVX_MFD_Manager.Cast(child.FindComponent(RVX_MFD_Manager)));
+			
+			child = child.GetSibling();
+		}
+		
+		foreach (RVX_MFD_Manager pageManager : pageManagers)
+		{
+			pageManager.StopFrameListener();
+		}
+		
+		// Deactivate HMD (temporary)
+		RVX_HMD hmd = RVX_HMD.Cast(ownerEntity.FindComponent(RVX_HMD));
+		hmd.StopHMD();
+	}
+	
+	private void ActivateLaserDesignator()
+	{
+		RVX_LaserDesignatorComponent laserDesignator = Inject<RVX_LaserDesignatorComponent>.GetFromSlot(GetOwner(), "MMS");
+		laserDesignator.RegisterActions();
+	}
+	
+	private void DeactivateLaserDesignator()
+	{
+		RVX_LaserDesignatorComponent laserDesignator = Inject<RVX_LaserDesignatorComponent>.GetFromSlot(GetOwner(), "MMS");
+		laserDesignator.UnRegisterActions();
+	}
+	
+	private void ActivateLaserSeeker()
+	{
+		ref array<Managed> comps = {};
+		ownerEntity.FindComponents(RVX_LaserSeeker, comps);
+		
+		foreach(Managed comp: comps)
+		{
+			RVX_LaserSeeker seeker = RVX_LaserSeeker.Cast(comp);
+			if (seeker)
+				seeker.ActivateSearch();
+		}
+	}
+	
+	private void DeactivateLaserSeeker()
+	{
+		ref array<Managed> comps = {};
+		ownerEntity.FindComponents(RVX_LaserSeeker, comps);
+		
+		foreach(Managed comp: comps)
+		{
+			RVX_LaserSeeker seeker = RVX_LaserSeeker.Cast(comp);
+			if (seeker)
+				seeker.DeactivateSearch();
+		}
+	}
+	
+	private void UnregisterMissileCamera()
+	{
+		RVX_MissileCameraComponent camera = Inject<RVX_MissileCameraComponent>.Get(GetOwner());
+		camera.Register();
+	}
+}

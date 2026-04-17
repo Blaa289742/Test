@@ -1,0 +1,91 @@
+class RVX_CameraLightComponentClass : ScriptGameComponentClass
+{
+
+}
+
+class RVX_CameraLightComponent : ScriptGameComponent
+{	
+	[Attribute("1", UIWidgets.Auto, "Camera id at show entity for", "Camera")]
+    protected int showOnCameraIndex;
+	
+	[Attribute("", UIWidgets.ResourcePickerThumbnail, "", "emat")]
+	private ResourceName emissiveMaterial;
+	
+	ref Diag_Material_Util DiagMaterialUtil;
+	
+	IEntity cloneEnt;
+	IEntity ownerEnt;
+	
+	override void OnPostInit(IEntity owner)
+    {
+        super.OnPostInit(owner);
+		
+		
+		
+		GetGame().GetCallqueue().CallLater(Initialize, 1000, false, owner);
+    }
+	
+	protected void Apply(IEntity owner)
+	{
+		owner.SetCameraMask(-2);
+	}
+	
+	protected void Initialize(IEntity owner)
+	{
+		BaseWorld world = owner.GetWorld();
+		
+		InventoryItemComponent inventoryComponent = InventoryItemComponent.Cast(owner.FindComponent(InventoryItemComponent));
+		IEntity clone = inventoryComponent.CreatePreviewEntity(world, 1);
+		/*Resource resource = Resource.Load(owner.GetPrefabData().GetPrefabName());
+		IEntity clone = SCR_PrefabPreviewEntity.Cast(SCR_PrefabPreviewEntity.SpawnPreviewFromPrefab(resource, "SCR_PrefabPreviewEntity", owner.GetWorld()));*/
+		
+		//owner.AddChild(clone, -1);
+
+		
+		/*IEntity parent = owner.GetParent();
+		EntityPrefabData prefabData = owner.GetPrefabData();
+		ResourceName resName = prefabData.GetPrefabName();
+		ref Resource resource = Resource.Load(resName);
+		bool isValid = resource.IsValid();
+		IEntity clone = GetGame().SpawnEntityPrefabLocal(resource, GetGame().GetWorld());*/
+		
+		
+		ApplyEmissiveMaterial(clone);
+		
+		
+		owner.AddChild(clone, -1);
+		//clone.ClearFlags(clone.GetFlags(), true);
+		//clone.SetFlags(owner.GetFlags(), true);
+		
+		//clone.SetCameraMask(-1);
+		GetGame().GetCallqueue().CallLater(Apply, 10, false, clone);
+		owner.SetCameraMask(-1);
+		
+		clone.SetVComponentFlags(VCFlags.NOFILTER);
+		IEntity child = clone.GetChildren();
+		while (child)
+		{
+			child.SetVComponentFlags(VCFlags.NOFILTER);
+			child = child.GetSibling();
+		}
+				
+		
+		cloneEnt = clone;
+		ownerEnt = owner;
+		
+		DiagMaterialUtil = new Diag_Material_Util("");
+		SetEventMask(owner, EntityEvent.FRAME);
+	}
+	
+	override protected void EOnFrame(IEntity owner, float timeSlice)
+	{
+		DiagMaterialUtil.update();
+		cloneEnt.SetCameraMask(DiagMaterialUtil.multiplier3);
+		ownerEnt.SetCameraMask(DiagMaterialUtil.multiplier4);
+	}
+	
+	private void ApplyEmissiveMaterial(IEntity entity)
+	{
+		SCR_Global.SetMaterial(entity, emissiveMaterial, true);
+	}
+}

@@ -1,0 +1,6 @@
+[BaseContainerProps()]
+class RVX_58D_WCS_ArmamentWeaponGroup: WCS_ArmamentWeaponGroup
+{
+	[Attribute("")]
+	string weaponCode;
+}

@@ -1,0 +1,18 @@
+class RVX_58D_AircraftManagerComponentClass: RVX_AircraftManagerComponentClass
+{
+
+}
+
+class RVX_58D_AircraftManagerComponent : RVX_AircraftManagerComponent
+{	
+	override void OnPostInit(IEntity owner)
+    {
+        super.OnPostInit(owner);
+		//GetGame().GetCallqueue().CallLater(ShowAircraftManager, 500);
+    }
+	
+	override void ShowAircraftManager()
+	{
+		GetGame().GetMenuManager().OpenMenu( ChimeraMenuPreset.RVX_58D_AircraftManagerMenu );
+	}
+}

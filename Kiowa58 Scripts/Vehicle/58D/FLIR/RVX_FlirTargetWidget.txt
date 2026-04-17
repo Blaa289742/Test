@@ -1,0 +1,48 @@
+class RVX_FlirTargetWidget : SCR_ScriptedWidgetComponent
+{
+	protected IEntity ownerEnt;
+    protected IEntity targetEnt;
+    protected RplId targetId;
+
+    protected ImageWidget flirTarget;
+	
+    override void HandlerAttached(Widget w)
+    {
+        super.HandlerAttached(w);
+        flirTarget = ImageWidget.Cast(w.FindWidget("FlirTarget"));
+    }
+
+    void Init(IEntity target, IEntity owner)
+    {
+        targetEnt = target;
+        targetEnt = owner;
+        targetId = Replication.FindId(target);
+    }
+
+    IEntity GetTarget()
+    {
+        return targetEnt;
+    }
+
+    void SetTransfrom(float x, float y, float w, float h)
+    {
+        FrameSlot.SetSize(m_wRoot, w, h);
+        FrameSlot.SetPos(m_wRoot, x, y);
+    }
+
+    /*void SetActive(bool active)
+    {
+        if (active)
+        {
+            m_wLeftUpCorner.SetColor(new Color(0.760998, 0.386007, 0.078004, 1.000000));
+            m_wRighDownCorner.SetColor(new Color(0.760998, 0.386007, 0.078004, 1.000000));
+            m_wRighUpCorner.SetColor(new Color(0.760998, 0.386007, 0.078004, 1.000000));
+            m_wLeftDownCorner.SetColor(new Color(0.760998, 0.386007, 0.078004, 1.000000));
+        } else {
+            m_wLeftUpCorner.SetColor(Color.White);
+            m_wRighDownCorner.SetColor(Color.White);
+            m_wRighUpCorner.SetColor(Color.White);
+            m_wLeftDownCorner.SetColor(Color.White);
+        }
+    }*/
+}
