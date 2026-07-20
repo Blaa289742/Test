@@ -1,0 +1,416 @@
+class RVX_AircraftManagerMapPage: RVX_AircraftManagerPage
+{
+	static const ResourceName waypointTemplate = "{5ED6255BF420C29E}UI/layouts/AircraftManager/AircraftManager_Waypoint.layout";
+	static const ResourceName waypointRowTemplate = "{EB97CADA75CB338A}UI/layouts/AircraftManager/AircraftManager_WaypointRow.layout";
+	
+	private Widget root;
+	private ImageWidget mapWidget;
+	private CanvasWidget canvasWidget;
+	private FrameWidget mapContainerWidget;
+	private FrameWidget mapElementWidget;
+	private FrameWidget waypointsContainerWidget;
+	private ImageWidget helicopterIcon;
+	
+	private ref array<RVX_DraggableWidget> waypointWidgets = {};
+	private ref array<RVX_AircraftManagerWaypointRowWidget> waypointRowWidgets = {};
+	protected ref array<ref CanvasWidgetCommand> canvasDrawCommands = new array<ref CanvasWidgetCommand>;
+	
+	private float mapZoomLevel = 1;
+	private float dragMapOffsetX = 0;
+	private float dragMapOffsetY = 0;
+	private float currentMapOffsetX = 0;
+	private float currentMapOffsetY = 0;
+
+	IEntity vehicleEntity;
+	
+	//Components
+	private RVX_AircraftManagerComponent aircraftManager;
+	
+	override void Init(Widget rootWidget)
+	{
+		root = rootWidget;
+		PreloadWidgets();
+		PreloadComponents();
+		AddButtonListeners();
+		
+		AddMapDoubleClickEventHandler();
+		AddMapEventEventHandler();
+		PreloadMapTexture();
+	}
+	
+	override void Update()
+	{
+		int mouseX;
+		int mouseY;
+		WidgetManager.GetMousePos(mouseX, mouseY);
+			
+		//array<Widget> outWidgets = {};
+		Widget marker = WidgetManager.GetWidgetUnderCursor();
+		if (marker)
+		{
+			RVX_DraggableWidget widget = RVX_DraggableWidget.Cast(marker.FindHandler(RVX_DraggableWidget));
+			if (widget)
+			{
+				float widgetPosX;
+				float widgetPosY;
+				mapContainerWidget.GetScreenPos(widgetPosX, widgetPosY);
+				float waypointPosX = GetGame().GetWorkspace().DPIUnscale(mouseX) - GetGame().GetWorkspace().DPIUnscale(widgetPosX);
+				float waypointPosY = GetGame().GetWorkspace().DPIUnscale(mouseY) - GetGame().GetWorkspace().DPIUnscale(widgetPosY);
+				
+				widget.OnMouseMove(waypointPosX, waypointPosY);
+			}
+		}
+		
+		RVX_RightMouseDraggableWidget handler = RVX_RightMouseDraggableWidget.Cast(mapContainerWidget.FindHandler(RVX_RightMouseDraggableWidget));
+		handler.OnMouseMove(mouseX, mouseY);
+		
+		UpdateHelicopterPosition();
+		UpdateWaypointLines();
+	}
+	
+	override void Save()
+	{
+		SaveWaypoints();
+	}
+	
+	override void OnTabClosed()
+	{
+	
+	}
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	private void PreloadWidgets()
+	{
+		mapContainerWidget = FrameWidget.Cast(root.FindAnyWidget("MapContainer"));
+		mapElementWidget = FrameWidget.Cast(root.FindAnyWidget("MapElement"));
+		canvasWidget = CanvasWidget.Cast(root.FindAnyWidget("CanvasOverlay"));
+		waypointsContainerWidget = FrameWidget.Cast(root.FindAnyWidget("WaypointsContainer"));
+		helicopterIcon = ImageWidget.Cast(root.FindAnyWidget("HelicopterIcon"));
+		
+		canvasWidget.SetDrawCommands(canvasDrawCommands);
+	}
+	
+	private void PreloadComponents()
+	{
+		PlayerController playerController = GetGame().GetPlayerController();
+		IEntity player = playerController.GetControlledEntity();
+		if(playerController && player.GetParent())
+		{
+			IEntity vehicle = player.GetParent();
+			vehicleEntity = vehicle;
+			aircraftManager = RVX_AircraftManagerComponent.Cast(vehicle.FindComponent(RVX_AircraftManagerComponent));
+			
+			PreloadCurrentWaypoints();
+		}
+	}
+	
+	private void AddButtonListeners()
+	{
+		ButtonActionComponent.GetOnAction(root, "ButtonZoomIn").Insert(OnMapZoomIn);
+		ButtonActionComponent.GetOnAction(root, "ButtonZoomOut").Insert(OnMapZoomOut);
+		ButtonActionComponent.GetOnAction(root, "ButtonZoomReset").Insert(OnMapZoomReset);
+		ButtonActionComponent.GetOnAction(root, "ButtonDeleteAllWaypoints").Insert(OnDeleteAllWaypoints);
+	}
+	
+	private void PreloadMapTexture()
+	{
+		ResourceName mapTexture = GetMapTexture();
+		mapWidget.LoadImageTexture(0, mapTexture);
+		mapWidget.SetImage(0);
+	}
+	
+	private void AddMapDoubleClickEventHandler()
+	{
+		mapWidget = ImageWidget.Cast(root.FindAnyWidget("Map"));
+		RVX_DoubleClick handler = RVX_DoubleClick.Cast(mapWidget.FindHandler(RVX_DoubleClick));
+		handler.GetOnDoubleClick().Insert(CreateMarker);
+	}
+	
+	private void AddMapEventEventHandler()
+	{
+		mapContainerWidget = FrameWidget.Cast(root.FindAnyWidget("MapContainer"));
+		RVX_RightMouseDraggableWidget handler = RVX_RightMouseDraggableWidget.Cast(mapContainerWidget.FindHandler(RVX_RightMouseDraggableWidget));
+		handler.GetOnDrag().Insert(OnMapDrag);
+		handler.GetOnDragFinished().Insert(OnMapDragFinished);
+		handler.GetOnWheelScrolled().Insert(OnMapScrollWheel);
+	}
+	
+////// Updates per frame	
+	private void UpdateHelicopterPosition()
+	{
+		if (!vehicleEntity)
+			return;
+		float iconSizeX = FrameSlot.GetSizeX(helicopterIcon);
+		float iconSizeY = FrameSlot.GetSizeY(helicopterIcon);
+		vector heliPos = vehicleEntity.GetOrigin();
+		
+		FrameSlot.SetPos(helicopterIcon, (heliPos[0] / GetMapSizeX() *  FrameSlot.GetSizeX(mapWidget)) - iconSizeX / 2, FrameSlot.GetSizeY(mapWidget) - (heliPos[2] / GetMapSizeY() * FrameSlot.GetSizeY(mapWidget)) - iconSizeY / 2);
+		helicopterIcon.SetRotation(vehicleEntity.GetYawPitchRoll()[0]);
+	}
+	
+////// Action handlers	
+	private void OnMapZoomIn()
+	{
+		float centerX = FrameSlot.GetSizeX(mapContainerWidget.GetParent()) / 2;
+		float centerY = FrameSlot.GetSizeY(mapContainerWidget.GetParent()) / 2;
+	
+		OnMapScrollWheel(centerX, centerY, 1);
+	}
+	
+	private void OnMapZoomOut()
+	{
+		float centerX = FrameSlot.GetSizeX(mapContainerWidget.GetParent()) / 2;
+		float centerY = FrameSlot.GetSizeY(mapContainerWidget.GetParent()) / 2;
+		OnMapScrollWheel(centerX, centerY, -1);
+	}
+	
+	private void OnMapZoomReset()
+	{
+		float centerX = FrameSlot.GetSizeX(mapContainerWidget.GetParent()) / 2;
+		float centerY = FrameSlot.GetSizeY(mapContainerWidget.GetParent()) / 2;
+		OnMapScrollWheel(centerX, centerY, 0, true);
+		dragMapOffsetX = 0;
+		dragMapOffsetY = 0;
+		FrameSlot.SetPos(mapContainerWidget, dragMapOffsetX, dragMapOffsetY);
+	}
+	
+	private void OnDeleteAllWaypoints()
+	{	
+		foreach(RVX_DraggableWidget widget: waypointWidgets)
+		{
+			widget.GetWidget().RemoveFromHierarchy();
+		}
+		waypointWidgets.Clear();
+		UpdateWaypointList();
+	}
+
+///// Waypoints	
+	private void PreloadCurrentWaypoints()
+	{
+		auto waypoints = aircraftManager.GetWaypoints();
+		mapWidget = ImageWidget.Cast(root.FindAnyWidget("Map"));
+		int i = 1;
+		foreach(RVX_WaypointData waypoint: waypoints)
+		{
+			float mapSizeX = GetMapSizeX();
+			float mapSizeY = GetMapSizeY();
+			float posX = (waypoint.position[0] / mapSizeX) * FrameSlot.GetSizeX(mapWidget);
+			float posY = ((mapSizeY - waypoint.position[2]) / mapSizeY) * FrameSlot.GetSizeY(mapWidget);
+			
+			RVX_DraggableWidget waypointWidget;
+			Widget widget = root.GetWorkspace().CreateWidgets(waypointTemplate, mapContainerWidget);
+			waypointWidget = RVX_DraggableWidget.Cast(widget.FindHandler(RVX_DraggableWidget));
+			
+			waypointWidget.Create(widget, 30, 30, posX, posY, "W" + i.ToString());
+			waypointWidgets.Insert(waypointWidget);
+			
+			UpdateWaypointList();
+			i++;
+		}
+	}
+	
+	private void UpdateWaypointsPositionAfterZoom()
+	{
+		for(int i = 0; i < waypointWidgets.Count(); i++)
+		{
+			waypointWidgets[i].OnParentResized();
+		}
+	}
+	
+	private float GetMapSizeX()
+	{
+		if (SCR_MapEntity.GetMapInstance())
+			return SCR_MapEntity.GetMapInstance().GetMapSizeX();
+		
+		return 4096;
+	}
+	
+	private float GetMapSizeY()
+	{
+		if (SCR_MapEntity.GetMapInstance())
+			return SCR_MapEntity.GetMapInstance().GetMapSizeY();
+		
+		return 4096;
+	}
+	
+	private void CreateMarker(int x, int y)
+	{
+		RVX_DraggableWidget waypointWidget;
+		Widget widget = root.GetWorkspace().CreateWidgets(waypointTemplate, mapContainerWidget);
+		waypointWidget = RVX_DraggableWidget.Cast(widget.FindHandler(RVX_DraggableWidget));
+		
+		float widgetPosX;
+		float widgetPosY;
+		mapContainerWidget.GetScreenPos(widgetPosX, widgetPosY);
+		
+		float mousePosX = GetGame().GetWorkspace().DPIUnscale(x) - GetGame().GetWorkspace().DPIUnscale(widgetPosX);
+		float mousePosY = GetGame().GetWorkspace().DPIUnscale(y) - GetGame().GetWorkspace().DPIUnscale(widgetPosY);
+		string widgetName = "W" + (waypointWidgets.Count() + 1).ToString();
+		waypointWidget.Create(widget, 30, 30, mousePosX, mousePosY, widgetName);
+		waypointWidgets.Insert(waypointWidget);
+		
+		UpdateWaypointList();
+	}
+	
+	private void OnMapDrag(int x, int y)
+	{
+		dragMapOffsetX = x;
+		dragMapOffsetY = y;
+		FrameSlot.SetPos(mapContainerWidget, dragMapOffsetX + currentMapOffsetX, dragMapOffsetY + currentMapOffsetY);
+	}
+	
+	private void OnMapDragFinished()
+	{
+		currentMapOffsetX = dragMapOffsetX + currentMapOffsetX;
+		currentMapOffsetY = dragMapOffsetY + currentMapOffsetY;
+	}
+	
+	private void OnMapScrollWheel(int mouseX, int mouseY, int scroll, bool resetZoom = false)
+	{	
+	    float oldZoom = mapZoomLevel;
+	    float delta = Math.Clamp(scroll, -1, 1);
+	
+	    // update zoom
+	    mapZoomLevel += (delta / 5);
+	    if (mapZoomLevel < 1) mapZoomLevel = 1;
+	    if (mapZoomLevel > 7) mapZoomLevel = 7;
+		
+		if (resetZoom) mapZoomLevel = 1;
+	
+	    // current widget rects
+	    float mapSizeOld = 634 * oldZoom;
+	    float mapSizeNew = 634 * mapZoomLevel;
+	
+	    // get relative percentage of mouse position inside map container
+	    float xPercent = (mouseX - FrameSlot.GetPosX(mapContainerWidget)) / mapSizeOld;
+	    float yPercent = (mouseY - FrameSlot.GetPosY(mapContainerWidget)) / mapSizeOld;
+	
+	    // calculate new top-left so that zoom centers on cursor
+	    float newLeft = mouseX - (xPercent * mapSizeNew);
+	    float newTop  = mouseY - (yPercent * mapSizeNew);
+	
+	    // resize
+	    FrameSlot.SetSize(mapWidget, mapSizeNew, mapSizeNew);
+	    FrameSlot.SetSize(mapContainerWidget, mapSizeNew, mapSizeNew);
+	    FrameSlot.SetSize(canvasWidget, mapSizeNew, mapSizeNew);
+	
+	    // reposition container
+	    FrameSlot.SetPos(mapContainerWidget, newLeft, newTop);
+		currentMapOffsetX = FrameSlot.GetPosX(mapContainerWidget);
+		currentMapOffsetY = FrameSlot.GetPosY(mapContainerWidget);
+		
+		UpdateWaypointsPositionAfterZoom();
+	}
+
+////// Waypoints list
+	private void UpdateWaypointList()
+	{
+		foreach(RVX_AircraftManagerWaypointRowWidget rowWidget: waypointRowWidgets)
+		{
+			rowWidget.GetWidget().RemoveFromHierarchy();
+		}
+		waypointRowWidgets.Clear();
+		int i = 0;
+		foreach(RVX_DraggableWidget widget: waypointWidgets)
+		{
+			RenderWaypointRow(i, widget.GetWaypointID());
+		 	i++;
+		}
+	}
+	
+	private void RenderWaypointRow(int index, string waypointID)
+	{
+		Widget widget = root.GetWorkspace().CreateWidgets(waypointRowTemplate, waypointsContainerWidget);
+		TextWidget waypointIndex = TextWidget.Cast(widget.FindAnyWidget("WaypintIndex"));
+		waypointIndex.SetText("#" + index);
+		FrameSlot.SetSize(widget, 478, 53);
+		FrameSlot.SetPosY(widget, FrameSlot.GetSizeY(widget) * index);
+		
+		RVX_AircraftManagerWaypointRowWidget rowWidget = RVX_AircraftManagerWaypointRowWidget.Cast(widget.FindHandler(RVX_AircraftManagerWaypointRowWidget));
+		rowWidget.Init(index, widget, waypointID);
+		rowWidget.GetOnDelete().Insert(DeleteWaypoint);
+		rowWidget.GetOnMoveUp().Insert(MoveUp);
+		rowWidget.GetOnMoveDown().Insert(MoveDown);
+		
+		waypointRowWidgets.Insert(rowWidget);
+	}
+
+///// Waypoints list actions	
+	private void DeleteWaypoint(int i)
+	{
+		Widget widget = waypointWidgets[i].GetWidget();
+		waypointWidgets.RemoveOrdered(i);
+		widget.RemoveFromHierarchy();
+		UpdateWaypointList();
+	}
+	
+	private void MoveUp(int i)
+	{
+		if(i != 0)
+		{
+			waypointWidgets.SwapItems(i, i-1);
+			UpdateWaypointList();
+		}
+	}
+	
+	private void MoveDown(int i)
+	{
+		if(i != waypointWidgets.Count() - 1)
+		{
+			waypointWidgets.SwapItems(i, i+1);
+			UpdateWaypointList();
+		}
+	}
+	
+	
+////// Waypoint lines
+	private void UpdateWaypointLines()
+	{		
+		canvasDrawCommands.Clear();
+		if (waypointWidgets.Count() < 2)
+		{
+			return;
+		}
+		
+		for(int i=1; i < waypointWidgets.Count(); i++)
+		{
+			DrawLine(waypointWidgets[i-1], waypointWidgets[i]);
+		}	
+	}
+	
+	private void DrawLine(RVX_DraggableWidget widget1, RVX_DraggableWidget widget2)
+	{
+		float w,h;
+		canvasWidget.GetScreenSize(w, h);
+		
+		vector widgetSize = FrameSlot.GetSize(canvasWidget);
+		
+		float x1 = widget1.GetPosX() / widgetSize[0] * w;
+		float x2 = widget2.GetPosX() / widgetSize[0] * w;
+		float y1 = widget1.GetPosY() / widgetSize[1] * h;
+		float y2 = widget2.GetPosY() / widgetSize[1] * h;
+		
+		ref LineDrawCommand drawLine = new LineDrawCommand();
+		drawLine.m_Vertices = { x1, y1, x2, y2 };
+		drawLine.m_iColor = Color.Black.PackToInt();
+		drawLine.m_fWidth = 2;
+		canvasDrawCommands.Insert(drawLine);
+	}	
+	
+////// Save handlers
+	private void SaveWaypoints()
+	{
+		ref array<ref RVX_WaypointData> waypoints = {};
+		int i = 1;
+		foreach(RVX_DraggableWidget widget: waypointWidgets)
+		{
+			RVX_WaypointData waypoint = new RVX_WaypointData();
+			float mapSizeX = GetMapSizeX();
+			float mapSizeY = GetMapSizeY();
+			waypoint.position = Vector((widget.GetPosX() / FrameSlot.GetSizeX(mapWidget)) * mapSizeX, 1 , mapSizeY - (widget.GetPosY() / FrameSlot.GetSizeY(mapWidget)) * mapSizeY);
+			waypoint.waypointID = i.ToString();
+			i++;
+			waypoints.Insert(waypoint);
+		}
+		aircraftManager.UpdateWaypoints(waypoints);
+	}
+}

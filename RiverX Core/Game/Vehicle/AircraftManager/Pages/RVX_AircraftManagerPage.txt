@@ -1,0 +1,14 @@
+class RVX_AircraftManagerPage
+{
+	void Init(Widget rootWidget){};
+	
+	void Update(){};
+	
+	void PreloadExtraWidgets(Widget rootWidget){};
+	
+	void LoadVehicleComponents(){};
+	
+	void OnTabClosed(){};
+	
+	void Save(){};
+}

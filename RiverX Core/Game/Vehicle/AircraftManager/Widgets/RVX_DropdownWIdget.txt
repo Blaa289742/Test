@@ -1,0 +1,165 @@
+class RVX_DropdownWidget : SCR_ScriptedWidgetComponent
+{
+	private static const ResourceName dropdownElementWidget = "{DD2613E72A11072F}UI/layouts/AircraftManager/Widgets/DropdownElementWidget.layout";
+	private Widget itemsContainerWidget;
+	private Widget dropdownWidget;
+	private TextWidget selectedItemWidget;
+	private TextWidget labelWidget;
+	private ImageWidget arrowWidget;
+	private Widget scrollWidget;
+	private Widget backgroundWidget;
+	
+	private static ref RVX_DropdownWidget openedDropdown;
+	private ref array<ref DropdownItem> dropdownItems = {};
+	private ref DropdownItem selectedItem;
+	private ref array<ref Widget> dropdownWidgets = {};
+	
+	////////////////////////////////////
+	private ref ScriptInvoker onItemSelected = new ScriptInvoker();
+	
+    override void HandlerAttached(Widget w)
+    {
+        super.HandlerAttached(w);
+		dropdownWidget = GetRootWidget().FindAnyWidget("Dropdown");
+		itemsContainerWidget = GetRootWidget().FindAnyWidget("DropdownContainer");
+		selectedItemWidget = TextWidget.Cast(GetRootWidget().FindAnyWidget("SelectedValueLabel"));
+		labelWidget = TextWidget.Cast((GetRootWidget().FindAnyWidget("DropdownLabel")));
+		arrowWidget = ImageWidget.Cast(GetRootWidget().FindAnyWidget("Arrow"));
+		
+		scrollWidget = GetRootWidget().FindAnyWidget("Scroll");
+		backgroundWidget = GetRootWidget().FindAnyWidget("Background");
+		
+		RVX_Click.Cast(GetRootWidget().FindAnyWidget("DropdownButton").FindHandler(RVX_Click)).GetOnClick().Insert(ToggleDropdown);
+    }
+	
+	void SetItems(array<ref DropdownItem> items)
+	{
+		foreach(Widget widget: dropdownWidgets)
+		{
+			widget.RemoveFromHierarchy()
+		}
+		dropdownWidgets.Clear();
+		
+		dropdownItems = items;
+		foreach(DropdownItem item: items)
+		{
+			Widget element = GetRootWidget().GetWorkspace().CreateWidgets(dropdownElementWidget, itemsContainerWidget);
+			TextWidget.Cast(element.FindAnyWidget("Label")).SetText(item.label);
+			RVX_Click.Cast(element.FindAnyWidget("ElementButton").FindHandler(RVX_Click)).GetOnClick(item.key).Insert(ItemSelected);
+			dropdownWidgets.Insert(element);
+		}
+		
+		FrameSlot.SetSizeY(backgroundWidget, items.Count() * 40);
+	}
+	
+	void SetLabel(string label)
+	{
+		if (labelWidget)
+		{
+			labelWidget.SetText(label)
+		}
+	}
+	
+	void UpdateItemLabel(int itemIndex, string name)
+	{
+		Widget element = dropdownWidgets.Get(itemIndex);
+		if (element)
+		{
+			TextWidget.Cast(element.FindAnyWidget("Label")).SetText(name);
+		}
+	}
+	
+	void SelectItem(string key)
+	{
+		selectedItem = GetItemByKey(key);
+		selectedItemWidget.SetText(selectedItem.label);
+	}
+	
+	ref DropdownItem GetCurrentItem()
+	{
+		return selectedItem;
+	}
+	
+	void Close()
+	{
+		SetDropdownState(false);
+	}
+	
+	ScriptInvoker GetOnItemSelected()
+	{
+		return onItemSelected;
+	}
+	
+	void SetWidth(float width)
+	{
+		FrameSlot.SetSizeX(GetRootWidget().FindAnyWidget("Border"), width);
+		FrameSlot.SetSizeX(GetRootWidget().FindAnyWidget("DropdownFrame"), width);
+		FrameSlot.SetSizeX(GetRootWidget().FindAnyWidget("Background"), width);
+		FrameSlot.SetSizeX(GetRootWidget().FindAnyWidget("Scroll"), width);
+	}
+	
+	private void ToggleDropdown()
+	{
+		SetDropdownState(!dropdownWidget.IsVisible());
+	}
+	
+	private void ItemSelected(string itemKey)
+	{	
+		selectedItem = GetItemByKey(itemKey);
+		onItemSelected.Invoke(selectedItem);
+		selectedItemWidget.SetText(selectedItem.label);
+		SetDropdownState(false);
+	}
+	
+	private void SetDropdownState(bool open)
+	{
+	    if (openedDropdown && openedDropdown != this)
+	    {
+	        openedDropdown.SetDropdownState(false);
+	        openedDropdown = null;
+	    }
+	
+		if (!itemsContainerWidget)
+			return;
+		
+		
+	    dropdownWidget.SetVisible(open);
+	    itemsContainerWidget.SetVisible(open);
+	    arrowWidget.SetRotation(TernaryInt(open, 180, 0));
+	
+	    if (open)
+	    {
+	        openedDropdown = this;
+	    }
+	    else if (openedDropdown == this)
+	    {
+	        openedDropdown = null;
+	    }
+	}
+	
+	private DropdownItem GetItemByKey(string itemKey)
+	{
+		DropdownItem item;
+		foreach(DropdownItem dItem: dropdownItems)
+		{
+			if (dItem.key == itemKey)
+			{
+				item = dItem;
+			}
+		}
+		
+		return item;
+	}
+}
+
+class DropdownItem
+{
+	string key;
+	string label;
+	
+	void DropdownItem(string ckey, string clabel)
+	{
+		key = ckey;
+		label = clabel;
+	}
+}

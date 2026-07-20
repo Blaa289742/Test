@@ -1,0 +1,22 @@
+//------------------------------------------------------------------------------------------------
+[BaseContainerProps()]
+class RVX_IsAimingSoflam : SCR_AvailableActionCondition
+{
+	//------------------------------------------------------------------------------------------------
+	override bool IsAvailable(notnull SCR_AvailableActionsConditionData data)
+	{
+		if (!data)
+			return false;
+
+		IEntity entity = data.GetCurrentItemEntity();
+		if (!entity)
+			return false;
+
+
+		RVX_SoflamSightsComponent soflamSight = RVX_SoflamSightsComponent.Cast(entity.FindComponent(RVX_SoflamSightsComponent));
+		if (!soflamSight)
+			return false;
+		
+		return soflamSight.GetSightActivated();
+	}
+};

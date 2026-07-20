@@ -1,0 +1,68 @@
+class RVX_RightMouseDraggableWidget: ScriptedWidgetComponent
+{
+	private ref ScriptInvoker onDrag = new ScriptInvoker();
+	private ref ScriptInvoker onDragCompleted = new ScriptInvoker();
+	private ref ScriptInvoker mouseScroll = new ScriptInvoker();
+	
+	private bool isDragging = false;
+	private float dragStartPosX = 0;
+	private float dragStartPosY = 0;
+	
+	override bool OnMouseButtonDown(Widget w, int x, int y, int button)
+	{
+		if (button != 1)
+			return false;
+		
+		isDragging = true;
+		dragStartPosX = x;
+		dragStartPosY = y;
+		
+		return true;
+	}
+	
+	override bool OnMouseButtonUp(Widget w, int x, int y, int button)
+	{
+		if (isDragging && button == 1)
+		{
+			isDragging = false;
+			onDragCompleted.Invoke(x - dragStartPosX, y - dragStartPosY);
+		}
+		return true;
+	}
+	
+	override bool OnMouseWheel(Widget w, int x, int y, int wheel)
+	{
+		float widgetPosX;
+		float widgetPosY;
+		w.GetParent().GetParent().GetScreenPos(widgetPosX, widgetPosY);
+		
+		float mousePosOnWidgetX = GetGame().GetWorkspace().DPIUnscale(x) - GetGame().GetWorkspace().DPIUnscale(widgetPosX);
+		float mousePosOnWidgetY = GetGame().GetWorkspace().DPIUnscale(y) - GetGame().GetWorkspace().DPIUnscale(widgetPosY);
+		
+		mouseScroll.Invoke(mousePosOnWidgetX, mousePosOnWidgetY, wheel);
+		return true;
+	}
+	
+	void OnMouseMove(int x, int y)
+	{
+		if (isDragging)
+		{
+			onDrag.Invoke(x - dragStartPosX, y - dragStartPosY);
+		}
+	}
+	
+	ScriptInvoker GetOnDrag()
+	{
+		return onDrag;
+	}
+	
+	ScriptInvoker GetOnDragFinished()
+	{
+		return onDragCompleted;
+	}
+	
+	ScriptInvoker GetOnWheelScrolled()
+	{
+		return mouseScroll;
+	}
+}

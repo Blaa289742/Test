@@ -1,0 +1,190 @@
+class RVX_AircraftManagerLoadoutPage: RVX_AircraftManagerPage
+{	
+	protected Widget root;
+	private FrameWidget loadoutComponentDisabled;	
+	private FrameWidget loadoutPageContainer;
+	private FrameWidget loadoutPageContainerDisabled;
+		
+	IEntity vehicleEntity;
+	
+	// Components
+	private RVX_AircraftManagerComponent aircraftManager;
+	private RVX_WCS_Armament_LoadoutComponent loadoutManager;
+	private ref array<ref RVX_DropdownWidget> pylonWidgets = {};
+	
+	// Runtime
+	protected bool isSupportVehicleNearby = false;
+	
+	override void Init(Widget rootWidget)
+	{
+		root = rootWidget;
+		PreloadWidgets(root);
+		PreloadComponents();
+	}
+	
+/////// Override these if needed in custom page
+	override void Update()
+	{
+		// Override if needed
+	}
+	
+	override void PreloadExtraWidgets(Widget rootWidget)
+	{
+		// Override if needed
+	}
+	
+	override void LoadVehicleComponents()
+	{
+		// Override if needed
+	}
+	
+	override void Save()
+	{
+		if (!isSupportVehicleNearby)
+			return;
+		SaveLoadout();
+	}
+	
+	override void OnTabClosed()
+	{
+		foreach(RVX_DropdownWidget dropdown: pylonWidgets)
+		{
+			dropdown.Close();
+		}
+	}
+	
+	ref DropdownItem GetPylonCurrentItem(int pylonIndex)
+	{
+		return pylonWidgets.Get(pylonIndex).GetCurrentItem();
+	}
+	
+/////// Do not modify methods
+	private void PreloadWidgets(Widget rootWidget)
+	{
+		loadoutComponentDisabled = FrameWidget.Cast(root.FindAnyWidget("LoadoutPageContainerDisabled"));
+		loadoutPageContainer = FrameWidget.Cast(root.FindAnyWidget("LoadoutPageContainer"));
+		loadoutPageContainerDisabled = FrameWidget.Cast(root.FindAnyWidget("LoadoutPageContainerDisabled"));
+		PreloadExtraWidgets(root);
+	}
+	
+	private void PreparePylonDropdowns()
+	{	
+		// Container must be frame widget
+		Widget pylonDataContainer = root.FindAnyWidget("PylonDataContainer");
+		array<Widget> createdWidgets = {};
+		
+		array<ref RVX_LoadoutWeaponStationDefinition> definitions = aircraftManager.GetLoadoutStationsDefinition();
+		for (int i = definitions.Count() - 1; i >= 0; i--)
+		{
+			RVX_LoadoutWeaponStationDefinition definition = definitions[i];
+			
+			Widget widget = root.GetWorkspace().CreateWidgets("{740B5718A82D43F2}UI/layouts/AircraftManager/Widgets/DropdownWidget.layout", pylonDataContainer);
+			RVX_DropdownWidget pylonDataWidget = RVX_DropdownWidget.Cast(widget.FindHandler(RVX_DropdownWidget));
+			
+			array<ref DropdownItem> pylonWeapons = {};
+			foreach(RVX_LoadoutWeaponDefinition weapon: definition.availableWeapons)
+			{
+				pylonWeapons.Insert(new DropdownItem(weapon.weaponCode, weapon.wepaonLabel));
+			}
+			pylonDataWidget.SetItems(pylonWeapons);
+			pylonDataWidget.SetLabel(definition.stationLabel);
+			createdWidgets.Insert(widget);
+			pylonWidgets.InsertAt(pylonDataWidget, 0);
+		}
+				
+		
+		// Stacking dropdowns in reverse so they do not clip each other
+		float currentY = 0;
+		for (int i = createdWidgets.Count() - 1; i >= 0; i--)
+		{
+			Widget widget = createdWidgets[i];
+	
+			// Ensure layout is calculated
+			widget.Update();
+			float height = FrameSlot.GetSizeY(widget);
+			FrameSlot.SetPosY(widget, currentY);
+			currentY += 100;
+		}
+	}
+	
+	private void PreloadComponents()
+	{
+		PlayerController playerController = GetGame().GetPlayerController();
+		IEntity player = playerController.GetControlledEntity();
+		if(playerController && player.GetParent())
+		{
+			IEntity vehicle = player.GetParent();
+			vehicleEntity = vehicle;
+			aircraftManager = RVX_AircraftManagerComponent.Cast(vehicle.FindComponent(RVX_AircraftManagerComponent));
+			loadoutManager = RVX_WCS_Armament_LoadoutComponent.Cast(vehicle.FindComponent(RVX_WCS_Armament_LoadoutComponent));
+			
+			CheckIsSupportStationNearby();
+			PreparePylonDropdowns();
+			SelectCurrentWeapons();
+			LoadVehicleComponents();
+		}
+	}
+	
+	private void CheckIsSupportStationNearby()
+	{
+		array<SCR_BaseSupportStationComponent> supportStations = {};
+		auto manager = SCR_SupportStationManagerComponent.GetInstance();
+		manager.GetStations(ESupportStationType.RESUPPLY_AMMO, supportStations);
+		bool isInRange = false;
+		
+		foreach(SCR_BaseSupportStationComponent station: supportStations)
+		{
+			if (vector.Distance(station.GetPosition(), vehicleEntity.GetOrigin()) < 15)
+			{
+				isInRange = true;
+			}
+		}
+
+		loadoutPageContainerDisabled.SetVisible(!isInRange);
+		isSupportVehicleNearby = isInRange;
+	}
+	
+	private void SelectCurrentWeapons()
+	{
+		if (!loadoutManager)
+			return;
+		RVX_StationWeaponConfiguration currentWeapons = loadoutManager.GetCurrentPylonConfig();
+		
+		int i = 0;
+		foreach(string weaponCode: currentWeapons.assignedPylonWeaponCodes)
+		{
+			pylonWidgets.Get(i).SelectItem(weaponCode);
+			i++;
+		}
+	}
+	
+	private void SaveLoadout()
+	{
+		ref RVX_StationWeaponConfiguration config = new RVX_StationWeaponConfiguration();
+		foreach(RVX_DropdownWidget pylonWidget: pylonWidgets)
+		{
+			if (pylonWidget.GetCurrentItem())
+			{
+				config.assignedPylonWeaponCodes.Insert(pylonWidget.GetCurrentItem().key);
+			}
+		}
+
+		loadoutManager.SetWeapons(config);
+	}
+}
+
+modded class SCR_SupportStationManagerComponent
+{
+	void GetStations(ESupportStationType type, notnull out array<SCR_BaseSupportStationComponent> supportStations)
+	{		
+		if (m_mSupportStations.Get(400))
+		{
+		 	supportStations.InsertAll(m_mSupportStations.Get(400));
+		}
+		
+		if (m_mSupportStations.Get(1000))
+		{
+		 	supportStations.InsertAll(m_mSupportStations.Get(1000));
+		}
+	}
+}

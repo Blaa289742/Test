@@ -1,0 +1,61 @@
+class RVX_AircraftManagerWaypointRowWidget : SCR_ScriptedWidgetComponent
+{
+	private ref ScriptInvoker moveUpAction = new ScriptInvoker();
+	private ref ScriptInvoker moveDownAction = new ScriptInvoker();
+	private ref ScriptInvoker deleteAction = new ScriptInvoker();
+	private int index;
+	private Widget widget;
+	
+    override void HandlerAttached(Widget w)
+    {
+        super.HandlerAttached(w);
+        ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonUp").Insert(MoveUp);
+        ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonDown").Insert(MoveDown);
+        ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonDelete").Insert(MoveDelete);
+    }
+	
+	void Init(int i, Widget w, string waypointID)
+	{
+		widget = w;
+		index = i;
+		
+		TextWidget.Cast(w.FindAnyWidget("WaypointID")).SetText(waypointID);
+	}
+	
+	ScriptInvoker GetOnMoveUp()
+	{
+		return moveUpAction;
+	}
+	
+	ScriptInvoker GetOnMoveDown()
+	{
+		return moveDownAction;
+	}
+	
+	ScriptInvoker GetOnDelete()
+	{
+		return deleteAction;
+	}
+	
+	
+	Widget GetWidget()
+	{
+		return widget;
+	}
+	
+	private void MoveUp()
+	{
+		moveUpAction.Invoke(index);
+	}
+	
+	private void MoveDown()
+	{
+		moveDownAction.Invoke(index);
+	}
+	
+	private void MoveDelete()
+	{
+		deleteAction.Invoke(index);
+	}
+
+}

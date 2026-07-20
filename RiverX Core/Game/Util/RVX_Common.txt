@@ -1,0 +1,154 @@
+float TernaryFloat(bool condition, float f1, float f2) {
+	if (condition) {
+		return f1;
+	} else {
+		return f2;
+	}
+}
+
+int TernaryInt(bool condition, int i1, int i2) {
+	if (condition) {
+		return i1;
+	} else {
+		return i2;
+	}
+}
+
+string TernaryString(bool condition, string s1, string s2) {
+	if (condition) {
+		return s1;
+	} else {
+		return s2;
+	}
+}
+
+Color TernaryColor(bool condition, Color c1, Color c2) {
+	if (condition) {
+		return c1;
+	} else {
+		return c2;
+	}
+}
+
+// Satellite map data
+ResourceName NO_MAP_DATA = "{6320221D6BAB718B}UI/textures/No_Map.edds";
+
+ResourceName GetMapTexture()
+{
+	SCR_MapEntity instance = SCR_MapEntity.GetMapInstance();
+	
+	// No map image
+	if (!instance)
+		return NO_MAP_DATA;
+	
+	// Map image from SCR_MapEntity
+	ResourceName mapData = instance.GetSatMapImage();
+	if (CheckImageResourceValid(mapData))
+		return mapData;
+	
+	// No map image
+	return NO_MAP_DATA;
+}
+
+bool CheckImageResourceValid(ResourceName image)
+{
+	ImageWidget widget = ImageWidget.Cast(GetGame().GetWorkspace().CreateWidget(WidgetType.ImageWidgetTypeID, 0, null, 0));
+	return widget.LoadImageTexture(0, image);
+}
+
+modded class SCR_MapEntity 
+{
+	private ResourceName mapSatImagePath;
+	
+	void SCR_MapEntity(IEntitySource src, IEntity parent)
+	{
+		src.Get("Satellite background image", mapSatImagePath);		
+		RVX_FLIR_Util.getInstance().ClearCache();
+	}
+	
+	ResourceName GetSatMapImage()
+	{
+		return mapSatImagePath;
+	}
+}
+
+//////////////////////////
+
+SCR_ChimeraCharacter GetSyncedAdapter()
+{
+	IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+	RplId creatorId = RplComponent.Cast(player.FindComponent(RplComponent)).Id();
+   	return SCR_ChimeraCharacter.Cast(player);
+}
+
+///////////////////////////
+class Inject<Class T>
+{
+	static T Get(IEntity ent)
+	{
+		Managed comp = ent.FindComponent(T);
+		if (comp)
+			return T.Cast(ent.FindComponent(T));
+		
+		IEntity parentEnt = ent.GetParent();
+		if (parentEnt)
+			return Get(parentEnt);
+		
+		return null;
+	}
+	
+	static T GetFromSlot(IEntity ent, string slotName)
+	{
+		SlotManagerComponent slotManager = SlotManagerComponent.Cast(ent.FindComponent(SlotManagerComponent));
+		if (slotManager) 
+		{
+			EntitySlotInfo slotInfo = slotManager.GetSlotByName(slotName);
+			if (slotInfo)
+			{
+				return T.Cast(slotInfo.GetAttachedEntity().FindComponent(T));
+			}
+		}
+		
+		IEntity parentEnt = ent.GetParent();
+		if (parentEnt)
+			return GetFromSlot(parentEnt, slotName);
+		
+		return null;
+	}
+	
+	static T FindInAnySlot(IEntity ent)
+	{
+		SlotManagerComponent slotManager = SlotManagerComponent.Cast(ent.FindComponent(SlotManagerComponent));
+		if (slotManager) 
+		{
+			array<EntitySlotInfo> slots = {};
+			slotManager.GetSlotInfos(slots);
+			foreach(EntitySlotInfo slot: slots)
+			{
+				if (slot.GetAttachedEntity())
+				{
+					T component =  T.Cast(slot.GetAttachedEntity().FindComponent(T));
+					if (component)
+						return component;
+				}
+			}
+		}
+
+		return null;
+	}
+}
+
+//////////////////////////
+
+class Subject: ScriptInvoker {};
+
+///////////////////////////
+
+/////////////////////////////
+/*class FindWidget<Widget T>
+{
+	static T Get(Widget rootWidget, string name)
+	{
+		return T.Cast(rootWidget.FindAnyWidget(name));
+	}
+}*/

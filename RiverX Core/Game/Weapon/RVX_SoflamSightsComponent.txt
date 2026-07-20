@@ -1,0 +1,169 @@
+[EntityEditorProps(category: "GameScripted/Weapon/Sights", description: "", color: "0 0 255 255")]
+class RVX_SoflamSightsComponentClass : SCR_2DSightsComponentClass
+{
+
+}
+class RVX_SoflamSightsComponent : SCR_2DSightsComponent
+{
+    [Attribute("", UIWidgets.ResourcePickerThumbnail, "Layout", params: "layout", category: "Resources")]
+    protected ResourceName layoutOverlay;
+
+	protected Widget root;
+	protected IEntity owner;
+	protected SignalsManagerComponent signalsManager;
+	protected RVX_SoflamComponent soflamComponent;
+	
+	// Widgets
+	protected TextWidget azimuthWidget;
+	protected TextWidget elevationWidget;
+	protected TextWidget codeWidget;
+	protected TextWidget rangeWidget;
+	protected TextWidget laserCodeWidget;
+	protected FrameWidget laserIndicatorWidget;
+	protected FrameWidget laserHUDWidget;
+	
+	protected bool laserActive = false;
+	
+	void Init(IEntity entity)
+	{
+		signalsManager = SignalsManagerComponent.Cast(entity.FindComponent(SignalsManagerComponent));
+		soflamComponent = RVX_SoflamComponent.Cast(entity.FindComponent(RVX_SoflamComponent));
+	}
+	
+	void UpdateUI()
+	{
+		if (!IsUsingSights())
+		{
+			if (root)
+				root.SetVisible(false);
+			
+			return;
+		}
+		
+		if (root)
+			root.SetVisible(true);
+			
+		
+		UpdateAzimuth();
+		UpdateLaser();
+		UpdateRange();
+		UpdateLaserCode();
+	}
+	
+	void ToggleLaserWidget()
+	{
+		if (!IsUsingSights())
+			return;
+		
+		laserActive = !laserActive;
+	}
+	
+	bool GetSightActivated()
+	{
+		return IsUsingSights();
+	}
+	
+	bool IsLaserOn()
+	{
+		return laserActive;
+	}
+	
+	protected override void OnSightADSActivated()
+	{
+		if (!root)
+		{
+			SCR_HUDManagerComponent hudManager = SCR_HUDManagerComponent.GetHUDManager();
+			if (hudManager)
+			{
+				SCR_HUDManagerLayoutHandler hudLayoutHandler = SCR_HUDManagerLayoutHandler.Cast(hudManager.FindHandler(SCR_HUDManagerLayoutHandler));
+
+				SCR_HUDElement hudElement = hudManager.CreateFreeElement(layoutOverlay, "Slot_2DOptics");
+				root = hudElement.GetWidget();
+			}
+
+			if (root)
+			{
+				// HUD and widgets setup
+				FindWidgets();
+			}
+		} else {
+			root.SetVisible(true);
+			root.SetEnabled(true);
+		}
+		
+		
+		soflamComponent.ToggleOn();
+		super.OnSightADSActivated();
+		
+	}
+
+	protected override void OnSightADSDeactivated()
+	{
+		laserActive = false;
+		super.OnSightADSDeactivated();
+
+		m_ParentCharacter = null;
+		soflamComponent.ToggleOff();
+		
+		if (root)
+			root.RemoveFromHierarchy();
+	}
+	
+	protected void FindWidgets()
+	{
+		azimuthWidget = TextWidget.Cast(root.FindAnyWidget("Text_Azimuth"));
+		elevationWidget = TextWidget.Cast(root.FindAnyWidget("Text_Elevation"));
+		codeWidget = TextWidget.Cast(root.FindAnyWidget("Text_Code"));
+		rangeWidget = TextWidget.Cast(root.FindAnyWidget("Text_Range"));
+		laserCodeWidget = TextWidget.Cast(root.FindAnyWidget("Text_Code"));
+		laserIndicatorWidget = FrameWidget.Cast(root.FindAnyWidget("Laser_On"));
+		laserHUDWidget = FrameWidget.Cast(root.FindAnyWidget("LaserON"));
+	}
+	
+	protected void UpdateAzimuth()
+	{
+		if (!azimuthWidget || !elevationWidget)
+			return;
+		
+		CameraManager manager = GetGame().GetCameraManager();
+		if (manager)
+		{
+			CameraBase cam = manager.CurrentCamera();
+			vector angles = cam.GetYawPitchRoll();
+			
+			float heading = Math.Round(angles[0]);
+			float elevation = Math.Round(angles[1]);
+			if(heading < 0)
+			{
+				heading += 360;
+			}
+			azimuthWidget.SetText(heading.ToString());
+			elevationWidget.SetText(elevation.ToString());
+		}
+	}
+	
+	protected void UpdateLaser()
+	{
+		if (!laserIndicatorWidget)
+			return;
+		
+		laserIndicatorWidget.SetVisible(laserActive);
+		laserHUDWidget.SetVisible(laserActive);
+	}
+	
+	protected void UpdateRange()
+	{
+		if (!rangeWidget)
+			return;
+		
+		rangeWidget.SetText(soflamComponent.GetLaserDistance().ToString());
+	}
+	
+	protected void UpdateLaserCode()
+	{
+		if (!laserCodeWidget)
+			return;
+		
+		laserCodeWidget.SetText(soflamComponent.GetLaserCode());
+	}
+}

@@ -1,0 +1,42 @@
+class RVX_WeaponComponentClass :  ScriptComponentClass {}
+
+class RVX_WeaponComponent : ScriptComponent
+{
+	ref ScriptInvoker OnFiredHandler = new ScriptInvoker();
+	
+	[Attribute("", UIWidgets.ComboBox, desc: "Type of weapon", enums: ParamEnumArray.FromEnum(RVXWeaponType))]
+	RVXWeaponType weaponType;
+	
+	[Attribute("", UIWidgets.Auto, "Weapon Identification Name", "")]
+    protected string weaponID;
+	//------------------------------------------------------------------------------------------------
+	string GetWeaponID()
+	{
+		return weaponID;
+	}
+	
+	void OnFired()
+	{
+		OnFiredHandler.Invoke();
+	}
+	
+	RVXWeaponType GetWeaponType()
+	{
+		return weaponType;
+	}
+}
+
+enum RVXWeaponType
+{
+	GUN,
+	AGM,
+	AGMLaser,
+	AGMRadar,
+	AGMSpike,
+	DAGR,
+	RKT,
+	APKWS,
+	GBU12,
+	AGM65E,
+	None
+}

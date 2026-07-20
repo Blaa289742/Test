@@ -1,0 +1,20 @@
+class RVX_TabWidget: ScriptedWidgetComponent
+{
+	
+	private ref Color selectedColor = new Color(0.064805, 0.076204, 0.059495, 1.000000);
+	private ref Color defaultColor = new Color(0.037507, 0.043702, 0.034607, 1.000000);
+	private Widget widget;
+	
+	override void HandlerAttached(Widget w)
+	{
+		widget = w;
+	}
+	
+	void SetSelected(bool selected)
+	{
+		if (selected)
+			widget.SetColor(selectedColor);
+		else
+			widget.SetColor(defaultColor);
+	}
+}

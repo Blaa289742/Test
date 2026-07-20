@@ -1,0 +1,93 @@
+// Base MFD component. All pages should extend this
+[BaseContainerProps()]
+class RVX_MFDComponent extends RVX_MFDComponentInternal
+{
+	/* REQUIRED
+	* Must return valid path to UI resource file
+	*/
+	override ResourceName GetTemplate() { return ""; }
+	
+	/* 
+	* Lifecycle: Method used for loading widgets to variables - with delayed initialization
+	*/
+	override void PreloadWidgets() {}
+	
+	/* 
+	* Lifecycle: Method used for loading components to variables - with delayed initialization
+	*/
+	override void PreloadComponents() {}
+	
+	/* 
+	* Lifecycle: Method runs per update rate defined in RVX_MFD_Manager. Use it to update UI
+	*/
+	override void UpdateDisplay(float timeSlice) {}
+	
+	/*
+	* Lifecycle: On page activated hook
+	*/ 
+	override void OnPageActivated()
+    {
+        super.OnPageActivated();
+    }
+
+	/*
+	* Lifecycle: On page deactivated hook
+	*/
+    override void OnPageDeactivated()
+    {
+		super.OnPageDeactivated();
+    }
+
+	/* 
+	* Callback for button pressed event. Button press is based of "EventName"
+	*/
+	override void OnButtonPressed(string buttonIndex) {}
+	
+	/* 
+	* Method used for marking widgets as blinking
+	*/
+	override void SetWidgetAsBlinking(Widget widget, int blinkTimeInMs = 100)
+	{
+		super.SetWidgetAsBlinking(widget, blinkTimeInMs);
+	}
+	
+	/* 
+	* Method used for disabling blinking on widget
+	*/
+	override void SetWidgetAsNotBlinking(Widget widget, int blinkTimeInMs = 100)
+	{
+		super.SetWidgetAsBlinking(widget, blinkTimeInMs);
+	}
+	
+	/* 
+	* Used by page manager to show/hide display
+	*/
+	override void SetScreenEnabled(bool enabled)
+	{
+		super.SetScreenEnabled(enabled);
+	}
+	
+	/* 
+	* Helper method for finding Widgets in template
+	*/
+	override Widget FindWidget(string name)
+	{
+		return super.FindWidget(name);
+	}
+	
+	/*
+	* Get owner entity
+	*/
+	override IEntity GetOwner()
+	{
+		return super.GetOwner();
+	}
+	
+	/*
+	* Get signal value from this entity parent (e.g. vehicle)
+	*/ 
+	override float GetSignalValue(string signalName)
+	{
+		return super.GetSignalValue(signalName);
+	}
+}

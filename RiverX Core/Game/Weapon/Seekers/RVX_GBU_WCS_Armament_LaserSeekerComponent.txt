@@ -1,0 +1,31 @@
+class RVX_GBU_WCS_Armament_LaserSeekerComponentClass : WCS_Armament_LaserSeekerComponentClass {}
+
+class RVX_GBU_WCS_Armament_LaserSeekerComponent : WCS_Armament_LaserSeekerComponent
+{
+	protected WCS_Armament_MissileMovementComponent missileMovement;
+	
+	[Attribute("87.6885", desc: "Used for time on target calculation")]
+	protected float ratedMissileSpeed;
+	
+	override void CalculateTargetPosition()
+	{
+		Print("GBU fired");
+		super.CalculateTargetPosition();
+	}
+	
+	float GetTargetDistance()
+	{
+		vector missilePos = GetOwner().GetOrigin();
+		return vector.Distance(missilePos, m_vTargetPosition);
+	}
+	
+	float GetMissileSpeed()
+	{
+		return GetOwner().GetPhysics().GetVelocity().Length();
+	}
+	
+	float GetRatedMissileSpeed()
+	{
+		return ratedMissileSpeed;
+	}
+}

@@ -1,0 +1,91 @@
+[BaseContainerProps()]
+class RVX_AttitudeIndicator_MFD_Sample : RVX_MFDComponent
+{	
+	// Widgets
+    protected TextWidget altitudeText;
+    protected TextWidget speedText;
+	protected ImageWidget headingTape;
+	protected TextWidget headingValue;
+	protected ImageWidget attitudeIndicator;
+	
+	// Override in MFD page
+	override ResourceName GetTemplate()
+	{
+		return "{3F105B6B20E11D2F}UI/layouts/MFD_AttitudeIndicator_Sample.layout";
+	}
+
+    override protected void PreloadWidgets()
+    {
+        super.PreloadWidgets();
+        altitudeText = TextWidget.Cast(FindWidget("Altitude"));
+        speedText = TextWidget.Cast(FindWidget("Speed"));
+        headingTape = ImageWidget.Cast(FindWidget("Heading_Tape"));
+        headingValue = TextWidget.Cast(FindWidget("Heading"));
+		attitudeIndicator = ImageWidget.Cast(FindWidget("Attitude"));
+    }
+	
+	override protected void PreloadComponents()
+	{
+		super.PreloadComponents();
+	}
+	
+	// Override in MFD page
+	override void OnButtonPressed(string buttonIndex)
+    {
+		super.OnButtonPressed(buttonIndex);	
+		
+		switch(buttonIndex)
+		{
+			case "HSI": { pageManager.SetCurrentPageName("HSI"); break; }
+			case "AttitudeIndicator": { pageManager.SetCurrentPageName("AttitudeIndicator"); break; }
+			case "FLIR": { pageManager.SetCurrentPageName("FLIR"); break; }
+		}
+    }
+
+	protected float METERS_TO_FEET = 3.2808399;
+	protected float MS_TO_FPM = 196.85;
+	
+    override void UpdateDisplay(float timeSlice)
+    {
+		super.UpdateDisplay(timeSlice);
+	
+		UpdateSpeed();
+		UpdateAltitude();
+		UpdateHeadingTape();
+		UpdateAttitude();
+    }
+	
+	protected void UpdateSpeed()
+	{
+		float airspeed = GetSignalValue("Speed");
+		int airspeedFlat = Math.Floor(airspeed*0.54);
+		speedText.SetText(airspeedFlat.ToString());
+	}
+		
+	protected void UpdateAltitude()
+	{	
+		float altitude = GetSignalValue("altitude");
+		int altitudeFlat = Math.Floor(Math.Floor(altitude*METERS_TO_FEET) / 10);
+		altitudeText.SetText(altitudeFlat.ToString());
+	}
+	
+	protected void UpdateHeadingTape()
+	{
+		float heading = GetSignalValue("yawangle");
+		if(heading < 0)
+			heading += 360;
+		float transformScale = 2.56;
+		FrameSlot.SetPosX(headingTape, (-heading * transformScale) -17.291);
+		headingValue.SetText(Math.Floor(heading).ToString());
+	}
+	
+	protected void UpdateAttitude()
+	{
+		float pitchAngle = GetSignalValue("pitchAngle");
+		float rollAngle = GetSignalValue("rollAngle");
+        
+		float transformScale = 6.12;
+		FrameSlot.SetPosY(attitudeIndicator, (pitchAngle * transformScale)-241.182);
+		attitudeIndicator.SetRotation(-rollAngle);
+	}
+}

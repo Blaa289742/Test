@@ -1,0 +1,258 @@
+class RVX_AircraftManagerComponentClass: ScriptGameComponentClass
+{
+
+}
+
+class RVX_AircraftManagerComponent : ScriptGameComponent
+{	
+	private ref array<ref RVX_WaypointData> waypoints = {};
+	private int currentWaypointIndex = 0;
+	
+    override void OnPostInit(IEntity owner)
+    {
+        super.OnPostInit(owner);
+		//GetGame().GetMenuManager().OpenMenu( ChimeraMenuPreset.RVXAircraftManager );
+		//MockData();
+    }
+	
+	void ShowAircraftManager()
+	{
+		GetGame().GetMenuManager().OpenMenu( ChimeraMenuPreset.RVX_AircraftManagerMenu );
+	}
+	
+	
+	///////////////// Waypoints
+	
+	void UpdateWaypoints(array<ref RVX_WaypointData> wpts)
+	{
+		array<string> waypointIds = {};
+		array<vector> waypointPositions = {};
+		foreach(RVX_WaypointData wpt: wpts)
+		{
+			waypointIds.Insert(wpt.waypointID);
+			waypointPositions.Insert(wpt.position);
+		}
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		RplId creatorId = RplComponent.Cast(GetOwner().FindComponent(RplComponent)).Id();
+       	SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(player);
+		character.UpdateAircraftManagerWaypoints(creatorId, waypointIds, waypointPositions);
+	}
+	
+	void UpdateWaypointsClient(array<ref RVX_WaypointData> wpts)
+	{
+		waypoints = wpts;
+		foreach(RVX_WaypointData wpt: waypoints)
+		{
+			wpt.position = WaypointPosToWorldPos(wpt.position);
+		}
+		currentWaypointIndex = 0;
+	}
+	
+	array<ref RVX_WaypointData> GetWaypoints()
+	{
+		return waypoints;
+	}
+	
+	ref RVX_WaypointData GetCurrentWaypoint()
+	{
+		if (waypoints.IsEmpty() || currentWaypointIndex >= waypoints.Count())
+			return null;
+		return waypoints[currentWaypointIndex];
+	}
+	
+	int GetCurrentWaypointIndex()
+	{
+		return currentWaypointIndex;
+	}
+	
+	float GetCurrentWaypointHeading()
+	{
+		return Math.Floor(GetCurrentWaypointHeadingRaw());
+	}
+	
+	float GetCurrentWaypointHeadingRaw()
+	{
+		RVX_WaypointData wpt = GetCurrentWaypoint();
+		if (!wpt)
+			return GetOwner().GetYawPitchRoll()[0];
+		
+		vector direction = vector.Direction(GetOwner().GetOrigin(), wpt.position).Normalized();;
+		vector angles = GetOwner().GetYawPitchRoll();
+		vector result = (direction.VectorToAngles() - angles);
+		return result[0];
+	}
+	
+	float GetCurrentWaypointDistance()
+	{
+		RVX_WaypointData wpt = GetCurrentWaypoint();
+		if (!wpt)
+			return 0.0;
+		
+		float distance = vector.Distance(GetOwner().GetOrigin(), wpt.position);
+		if (distance < 100)
+		{
+			AutoIncrementWaypoint();
+		}
+		
+		float distanceInKM = Math.Floor(((distance / 1000) * 10)) / 10;
+		return distanceInKM;
+	}
+	
+	void IncrementWaypoint()
+	{
+		if (currentWaypointIndex + 1 < waypoints.Count())
+		{
+			currentWaypointIndex++;
+			SetCurrentWaypoint(currentWaypointIndex);
+		}
+	}
+	
+	void DecrementWaypoint()
+	{
+		if (currentWaypointIndex > 0)
+		{
+			currentWaypointIndex--;
+			SetCurrentWaypoint(currentWaypointIndex);
+		}
+	}
+	
+	void SetCurrentWaypoint(int index)
+	{
+		if (index < waypoints.Count())
+		{
+			currentWaypointIndex = index;
+		}
+		if (!GetGame().GetPlayerController())
+			return;
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		RplId creatorId = RplComponent.Cast(GetOwner().FindComponent(RplComponent)).Id();
+       	SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(player);
+		character.UpdateCurrentWaypoint(creatorId, currentWaypointIndex);
+	}
+	
+	void SetCurrentWaypointClient(int index)
+	{
+		currentWaypointIndex = index;
+	}
+	
+	///////////////// Loadout
+	
+	ref array<ref RVX_LoadoutWeaponStationDefinition> GetLoadoutStationsDefinition()
+	{
+		RVX_WCS_Armament_LoadoutComponent loadoutComponent = Inject<RVX_WCS_Armament_LoadoutComponent>.Get(GetOwner());
+		ref array<ref PylonsDefinition> pylons = loadoutComponent.GetPylonDefinitions();
+		
+		ref array<ref RVX_LoadoutWeaponStationDefinition> loadoutStationDefinitions = {};
+		foreach(PylonsDefinition pylonDefinition: pylons)
+		{
+			ref RVX_LoadoutWeaponStationDefinition definition = new RVX_LoadoutWeaponStationDefinition();
+			definition.stationLabel = pylonDefinition.stationName;
+			definition.availableWeapons = pylonDefinition.availableWeapons;
+			loadoutStationDefinitions.Insert(definition);
+		}
+		return loadoutStationDefinitions;
+	}
+	
+	private void MockData()
+	{
+		ref RVX_WaypointData waypoint1 = new RVX_WaypointData();
+		waypoint1.waypointID = "1";
+		waypoint1.position = "927.937 39.001 2643.775";
+		
+		ref RVX_WaypointData waypoint2 = new RVX_WaypointData();
+		waypoint2.waypointID = "2";
+		waypoint2.position = "1386.594 0.019 2246.544";
+		
+		ref RVX_WaypointData waypoint3 = new RVX_WaypointData();
+		waypoint3.waypointID = "3";
+		waypoint3.position = "800.425842 0.000000 1505.312256";
+		
+		ref RVX_WaypointData waypoint4 = new RVX_WaypointData();
+		waypoint4.waypointID = "4";
+		waypoint4.position = "850.425842 0.000000 1600.312256";
+		
+		ref RVX_WaypointData waypoint5 = new RVX_WaypointData();
+		waypoint5.waypointID = "5";
+		waypoint5.position = "500.425842 0.000000 1300.312256";
+		
+		waypoints.Insert(waypoint1);
+		waypoints.Insert(waypoint2);
+		/*waypoints.Insert(waypoint3);
+		waypoints.Insert(waypoint4);
+		waypoints.Insert(waypoint5);*/
+	}
+	
+	private vector WaypointPosToWorldPos(vector input)
+	{
+		float terrainHeight = SCR_TerrainHelper.GetTerrainY(Vector(input[0], 1, input[2]));
+		return Vector(input[0], terrainHeight, input[2]);
+	}
+	
+	private void AutoIncrementWaypoint()
+	{
+		IncrementWaypoint();
+	}
+}
+
+
+// Multiplayer
+modded class SCR_ChimeraCharacter
+{ 	
+	void UpdateAircraftManagerWaypoints(RplId helicopterId, array<string> waypointIds, array<vector> waypointPositions)
+    { 
+        Rpc(RpcAsk_UpdateAircraftManagerWaypoints, helicopterId, waypointIds, waypointPositions);
+    }
+	
+	void UpdateCurrentWaypoint(RplId helicopterId, int currentWaypointIndex)
+    { 
+        Rpc(RpcAsk_UpdateCurrentWaypoint, helicopterId, currentWaypointIndex);
+    }
+	
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+    private void RpcAsk_UpdateAircraftManagerWaypoints(RplId helicopterId, array<string> waypointIds, array<vector> waypointPositions)
+    {
+		RpcAsk_BroadcastUpdateAircraftManagerWaypoints(helicopterId, waypointIds, waypointPositions);
+		Rpc(RpcAsk_BroadcastUpdateAircraftManagerWaypoints, helicopterId, waypointIds, waypointPositions);
+    }
+	
+	[RplRpc(RplChannel.Reliable, RplRcver.Broadcast)]
+    private void RpcAsk_BroadcastUpdateAircraftManagerWaypoints(RplId helicopterId, array<string> waypointIds, array<vector> waypointPositions)
+    {
+       	RplComponent comp = RplComponent.Cast(Replication.FindItem(helicopterId));
+		if(comp)
+		{
+			IEntity vehicle = comp.GetEntity();
+			RVX_AircraftManagerComponent waypointManager = RVX_AircraftManagerComponent.Cast(vehicle.FindComponent(RVX_AircraftManagerComponent));
+			
+			array<ref RVX_WaypointData> wpts = {};
+			for(int i = 0; i < waypointIds.Count(); i++)
+			{
+				ref RVX_WaypointData waypoint = new RVX_WaypointData();
+				waypoint.waypointID = waypointIds[i];
+				waypoint.position = waypointPositions[i];
+				wpts.Insert(waypoint);
+			}
+			
+			waypointManager.UpdateWaypointsClient(wpts);
+		}
+    }
+	
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+    private void RpcAsk_UpdateCurrentWaypoint(RplId helicopterId, int currentWaypointIndex)
+    {
+		RpcAsk_BroadcastUpdateCurrentWaypoint(helicopterId, currentWaypointIndex);
+		Rpc(RpcAsk_BroadcastUpdateCurrentWaypoint, helicopterId, currentWaypointIndex);
+    }
+	
+	[RplRpc(RplChannel.Reliable, RplRcver.Broadcast)]
+    private void RpcAsk_BroadcastUpdateCurrentWaypoint(RplId helicopterId, int currentWaypointIndex)
+    {
+       	RplComponent comp = RplComponent.Cast(Replication.FindItem(helicopterId));
+		if(comp)
+		{
+			IEntity vehicle = comp.GetEntity();
+			RVX_AircraftManagerComponent waypointManager = RVX_AircraftManagerComponent.Cast(vehicle.FindComponent(RVX_AircraftManagerComponent));			
+			waypointManager.SetCurrentWaypointClient(currentWaypointIndex);
+		}
+    }
+}

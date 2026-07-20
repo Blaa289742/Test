@@ -1,0 +1,19 @@
+class RVX_DropdownEmbeddableWidget : SCR_ScriptedWidgetComponent
+{
+	[Attribute("false", UIWidgets.Auto)];
+	private bool inheritParentWidth;
+	
+	private ResourceName dropdownWidget = "{740B5718A82D43F2}UI/layouts/AircraftManager/Widgets/DropdownWidget.layout";
+	
+	override void HandlerAttached(Widget w)
+    {
+        super.HandlerAttached(w);
+		Widget widget = GetGame().GetWorkspace().CreateWidgets(dropdownWidget, w);
+		RVX_DropdownWidget dropdownHandler = RVX_DropdownWidget.Cast(widget.FindHandler(RVX_DropdownWidget));
+		
+		if (inheritParentWidth)
+		{
+			dropdownHandler.SetWidth(FrameSlot.GetSizeX(w));
+		}
+    }
+}

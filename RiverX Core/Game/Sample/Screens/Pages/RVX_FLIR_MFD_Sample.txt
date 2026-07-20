@@ -1,0 +1,98 @@
+[BaseContainerProps()]
+class RVX_FLIR_MFD_Sample : RVX_MFDComponent
+{
+	// Widgets
+    protected RenderTargetWidget renderTargetWidget;
+    protected Widget lockWidget;
+    protected TextWidget zoomTextWidget;
+    protected TextWidget modeTextWidget;
+	protected int cameraIndex = 10;
+	private ref array<string> visionModes = {"TV", "WHOT", "BHOT"};
+	
+	// Components
+	private RVX_PilotCamera pilotCamera;
+	
+	// Override in MFD page
+	override ResourceName GetTemplate()
+	{
+		return "{05C5C4A1866046EB}UI/layouts/MFD_FLIR_Sample.layout";
+	}
+
+    override protected void PreloadWidgets()
+    {
+        super.PreloadWidgets();
+        renderTargetWidget = RenderTargetWidget.Cast(FindWidget("RenderTarget1"));
+        zoomTextWidget = TextWidget.Cast(FindWidget("ZOOM"));
+        modeTextWidget = TextWidget.Cast(FindWidget("Mode"));
+        lockWidget = FindWidget("Locked");
+				
+		BaseWorld baseWorld = GetGame().GetWorld();
+		renderTargetWidget.SetWorld(baseWorld, cameraIndex);
+		renderTargetWidget.SetResolutionScale(0.5, 0.5);
+    }
+	
+	// Override in MFD page (optional)
+	override void PreloadComponents() 
+	{
+		super.PreloadComponents();
+		pilotCamera = Inject<RVX_PilotCamera>.GetFromSlot(GetOwner(),"FLIR")
+	}
+	
+	// Override in MFD page
+	override void OnButtonPressed(string buttonIndex)
+    {
+		super.OnButtonPressed(buttonIndex);	
+		
+		switch(buttonIndex)
+		{
+			case "HSI": { pageManager.SetCurrentPageName("HSI"); break; }
+			case "AttitudeIndicator": { pageManager.SetCurrentPageName("AttitudeIndicator"); break; }
+			case "FLIR": { pageManager.SetCurrentPageName("FLIR"); break; }
+		}
+    }
+
+	override void UpdateDisplay(float timeSlice)
+    {
+		super.UpdateDisplay(timeSlice);
+		if(pilotCamera && pilotCamera.IsVehicleCrew())
+		{
+			renderTargetWidget.SetEnabled(true);
+			renderTargetWidget.SetVisible(true);
+		} else 
+		{
+			renderTargetWidget.SetEnabled(false);
+			renderTargetWidget.SetVisible(false);
+		}
+		
+		UpdateCameraLock();
+		UpdateCameraZoom();
+		UpdateCameraMode();
+    }
+	
+	override void OnPageActivated()
+	{
+		super.OnPageActivated();
+		pilotCamera.AddDisplayedOn(this);
+	}
+	
+	override void OnPageDeactivated()
+	{
+		super.OnPageDeactivated();
+		pilotCamera.RemoveDisplayedOn(this);
+	}
+	
+	private void UpdateCameraLock()
+	{
+		lockWidget.SetVisible(pilotCamera.IsStabilized());
+	}
+	
+	private void UpdateCameraZoom()
+	{
+		zoomTextWidget.SetText((pilotCamera.GetCurrentZoomLevel() + 1).ToString() + "x");
+	}
+	
+	private void UpdateCameraMode()
+	{
+		modeTextWidget.SetText(visionModes.Get(pilotCamera.GetVisionMode()));
+	}
+}

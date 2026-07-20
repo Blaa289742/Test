@@ -1,0 +1,31 @@
+class RVX_WaypointData: JsonApiStruct
+{
+	string waypointID;
+	vector position;
+	
+	void RVX_WaypointData()
+	{
+		RegV("waypointID");
+		RegV("position");
+	}
+}
+
+[BaseContainerProps(configRoot: true)]
+class RVX_LoadoutWeaponStationDefinition
+{
+	[Attribute(desc: "Weapon label to be displayed in aircraft manager loadout page")]
+	string stationLabel;
+	
+	[Attribute(desc: "Lit of weapons available for this station")]
+	ref array<ref RVX_LoadoutWeaponDefinition> availableWeapons;
+}
+
+[BaseContainerProps(configRoot: true)]
+class RVX_LoadoutWeaponDefinition
+{
+	[Attribute(desc: "Weapon label to be displayed in aircraft manager loadout page")]
+	string wepaonLabel;
+	
+	[Attribute(desc: "Weapon code to be used by systems to load weapon")]
+	string weaponCode;
+}

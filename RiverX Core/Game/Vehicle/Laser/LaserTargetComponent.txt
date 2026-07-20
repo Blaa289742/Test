@@ -1,0 +1,64 @@
+class LaserTargetComponentClass : ScriptGameComponentClass
+{
+
+}
+
+class LaserTargetComponent : ScriptGameComponent
+{	
+	[Attribute("1688", UIWidgets.Auto, "", "")]
+	protected string laserCode;
+	
+	string GetLaserCode()
+	{
+		return laserCode;
+	}
+	
+	void SetLaserCode(string code)
+	{
+		laserCode = code;
+		//SendRemoteUpdate();
+	}
+	
+	
+	//-----------------------------------------------------
+	void SendRemoteUpdate()
+	{
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		RplId creatorId = RplComponent.Cast(GetOwner().FindComponent(RplComponent)).Id();
+       	SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(player);
+		character.SetLaserTargetCode(creatorId, laserCode);
+	}
+	
+	void OnReceivedLaserCodeUpdate(string code)
+	{
+		laserCode = code;
+	}
+}
+
+
+modded class SCR_ChimeraCharacter
+{ 	
+	void SetLaserTargetCode(RplId targetId, string laserCode)
+    { 
+        Rpc(RpcAsk_SetLaserTargetCode, targetId, laserCode);
+    }
+	
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+    private void RpcAsk_SetLaserTargetCode(RplId targetId, string laserCode)
+    {
+		RpcAsk_BroadcastSetLaserTargetCode(targetId, laserCode);
+		//Rpc(RpcAsk_BroadcastToggleLaserSeeker, helicopterId, state);
+    }
+	
+	[RplRpc(RplChannel.Reliable, RplRcver.Broadcast)]
+    private void RpcAsk_BroadcastSetLaserTargetCode(RplId targetId, string laserCode)
+    {
+       	RplComponent comp = RplComponent.Cast(Replication.FindItem(targetId));
+		if(comp)
+		{
+			IEntity target = comp.GetEntity();
+			LaserTargetComponent laserComp = LaserTargetComponent.Cast(target.FindComponent(LaserTargetComponent));
+			laserComp.OnReceivedLaserCodeUpdate(laserCode);
+		}
+    }
+}

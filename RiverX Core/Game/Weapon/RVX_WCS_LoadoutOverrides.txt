@@ -1,0 +1,127 @@
+modded class WCS_Armament_LoadoutComponent
+{
+	private ref ScriptInvoker weaponLoadoutChangeInvoker = new ScriptInvoker();
+	
+	protected void CreateWeaponQueueFast()
+	{
+		if (m_RplComponent.IsProxy())
+			return;
+
+		array<RplId> weaponsIds = {};
+		m_WeaponManager.LoadWeapons(m_ArmamentGroups, GetOwner(), weaponsIds);
+		
+		m_WeaponManager.CycleWeaponGroup(GetFirstValidSlotIndex());
+
+		GetGame().GetCallqueue().CallLater(CreateWeaponQueueClient, 100, false, weaponsIds);
+	}
+	
+	WCS_Armament_WeaponManager GetWCSWeaponManager() 
+	{
+		return m_WeaponManager;
+	}
+	
+	ScriptInvoker OnLoadoutChanged()
+	{
+		return weaponLoadoutChangeInvoker;
+	}
+	
+	protected void WeaponsChanged()
+	{
+		weaponLoadoutChangeInvoker.Invoke();
+	}
+}
+
+modded class WCS_Armament_WeaponManager
+{
+	ref ScriptInvoker<int> currentWeaponSlotChanged = new ScriptInvoker<int>();
+	ref ScriptInvokerVoid weaponFired = new ScriptInvokerVoid();
+	
+	int GetDifferentWeaponsCount()
+	{
+		return m_aWeaponQueues.Count();
+	}
+	
+	override void CycleWeaponGroup(int currentWeaponManagerSlotIndex)
+	{
+		if (!m_mSlotIndexToQueue.Contains(currentWeaponManagerSlotIndex))
+			return;
+
+		super.CycleWeaponGroup(currentWeaponManagerSlotIndex);
+		currentWeaponSlotChanged.Invoke(currentWeaponManagerSlotIndex);
+	}
+	
+	override void Fire(vector parentVelocity, IEntity gunner)
+	{
+		super.Fire(parentVelocity, gunner);
+		weaponFired.Invoke();
+	}
+	
+	ScriptInvoker<int> OnWeaponSlotIndexChanged()
+	{
+		return currentWeaponSlotChanged;
+	}
+
+	
+	ScriptInvokerVoid GetOnWeaponFired()
+	{
+		return weaponFired;
+	}
+}
+
+modded class WCS_Armament_WeaponInfoVehicle
+{
+	protected bool m_bWCSSubscribed;
+
+	override protected void AddEventHandlers(IEntity owner)
+	{
+		super.AddEventHandlers(owner);
+
+		if (!m_bWCSSubscribed && m_WeaponLoadoutComponent)
+		{
+			m_WeaponLoadoutComponent.GetOnWeaponChanged().Insert(OnWCSWeaponChanged);
+			m_bWCSSubscribed = true;
+		}
+	}
+
+	override protected void RemoveEventHandlers(IEntity owner)
+	{
+		if (m_bWCSSubscribed && m_WeaponLoadoutComponent)
+		{
+			m_WeaponLoadoutComponent.GetOnWeaponChanged().Remove(OnWCSWeaponChanged);
+			m_bWCSSubscribed = false;
+		}
+
+		super.RemoveEventHandlers(owner);
+	}
+
+	protected void OnWCSWeaponChanged(WCS_Armament_WeaponComponent weapon)
+	{
+		BaseWeaponComponent currentWeapon = null;
+		if (m_WeaponManager)
+			currentWeapon = m_WeaponManager.GetCurrentWeapon();
+		OnWeaponChanged(currentWeapon, currentWeapon);
+	}
+}
+
+modded class WCS_Armament_MissileMovementComponent
+{
+    [Attribute("0", category: "Debug", desc: "Debug draw flight path")]
+	protected bool debugDrawFlightPath;
+	
+	protected static ref array<ref Shape> debugShapes = {};
+	private vector previousPos;
+	
+	override void MoveTowardsTarget(float timeSlice, vector targetPosition)
+    {
+        super.MoveTowardsTarget(timeSlice, targetPosition);
+		
+		IEntity owner = GetOwner();
+		if (debugDrawFlightPath && previousPos)
+		{	
+			Shape line = Shape.Create(ShapeType.LINE, ARGB(255, 0, 255, 0), ShapeFlags.NOZBUFFER, previousPos, owner.GetOrigin());
+			WCS_Armament_MissileMovementComponent.debugShapes.Insert(line);
+		}
+		
+		previousPos = owner.GetOrigin();
+    }
+}

@@ -1,0 +1,158 @@
+class RVX_SoflamComponentClass: SCR_BinocularsComponentClass
+{
+
+}
+class RVX_SoflamComponent : SCR_BinocularsComponent
+{
+	[Attribute("{C9E6AA1B77770517}Prefabs/Items/SOFLAM/LaserTarget.et", UIWidgets.ResourceNamePicker, "Rocket", "et")]
+	ResourceName laserTargetResource;
+	
+    protected RVX_SoflamSightsComponent sightComponent;
+	protected IEntity instance;
+	
+	protected ref array<ref Shape> m_aDebugShapes = {};
+	
+	protected float laserDistance = 0;
+	protected string laserCode = "1688";
+	protected IEntity soflam; 
+	
+	float GetLaserDistance()
+	{
+		return Math.Round(laserDistance * 2000);
+	}
+	
+	string GetLaserCode()
+	{
+		return laserCode;
+	}
+	
+	void SetLaserCode(string newCode)
+	{
+	 	laserCode = newCode;
+	}
+	
+	void ToggleOn()
+	{
+		SetEventMask(soflam, EntityEvent.FRAME);
+		GetGame().GetInputManager().AddActionListener("LaserDesignatorToggle", EActionTrigger.DOWN, OnToggleLaserDesignator);
+	}
+	
+	void ToggleOff()
+	{
+		ClearEventMask(soflam, EntityEvent.FRAME);
+		GetGame().GetInputManager().RemoveActionListener("LaserDesignatorToggle", EActionTrigger.DOWN, OnToggleLaserDesignator);
+		DeleteLaserTarget();
+	}
+	
+	//------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+	//------------------------------------------------------------------------------------------------
+	override protected void OnPostInit(IEntity owner)
+	{
+		super.OnPostInit(owner);
+		soflam = owner;
+		SetEventMask(owner, EntityEvent.INIT);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override protected void EOnInit(IEntity owner)
+	{
+        super.OnPostInit(owner);
+		
+		sightComponent = RVX_SoflamSightsComponent.Cast(owner.FindComponent(RVX_SoflamSightsComponent));
+		if(sightComponent)
+		{
+			sightComponent.Init(owner);
+		}
+    }
+	
+	override protected void EOnFrame(IEntity owner, float timeSlice)
+	{
+		UpdateUI();
+		UpdateLaserTarget();
+	}
+	
+	protected void UpdateUI()
+	{
+		if (!sightComponent)
+			return;
+		
+		sightComponent.UpdateUI();
+	}
+	
+	protected void OnToggleLaserDesignator(float value, EActionTrigger reason)
+	{
+		sightComponent.ToggleLaserWidget();
+		Print("OnToggleLaserDesignator: " + sightComponent.IsLaserOn());
+		if(sightComponent.IsLaserOn())
+		{
+			CreateLaserTarget()
+		} else 
+		{
+			DeleteLaserTarget();
+		}
+	}
+	
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+	void Rpc_AskToggleLaser()
+	{
+		sightComponent.ToggleLaserWidget();
+		Print("Server");
+		if (!Replication.IsServer())
+			return;
+	}
+	
+	protected void UpdateLaserTarget()
+	{
+		if(!sightComponent.IsLaserOn()) 
+			return;
+			
+		vector laserPos = GetCameraTargetPos();
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		RplId creatorId = RplComponent.Cast(player.FindComponent(RplComponent)).Id();
+       	SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(player);
+		character.UpdateLaserTargetPosAndCode(laserPos, creatorId, laserCode);
+		
+		
+		//Shape targetSphere = Shape.CreateSphere(Color.RED, ShapeFlags.DEFAULT, laserPos, 3);
+		//m_aDebugShapes.Insert(targetSphere);
+		//m_aDebugShapes.Remove(0);
+	}
+	
+	protected void DeleteLaserTarget()
+	{
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		RplId creatorId = RplComponent.Cast(player.FindComponent(RplComponent)).Id();
+	    SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(player);
+	    character.DeleteLaserTarget(creatorId);
+	}
+	
+	protected void CreateLaserTarget()
+	{
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		RplId creatorId = RplComponent.Cast(player.FindComponent(RplComponent)).Id();
+        SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(player);
+        character.SpawnLaserTarget(creatorId, laserCode);
+	}
+	
+	protected vector GetCameraTargetPos()
+	{
+		CameraBase camera = GetGame().GetCameraManager().CurrentCamera();
+		auto direction = camera.GetYawPitchRoll().AnglesToVector();
+		auto distance = RayCastFromCamera(direction, camera);
+		laserDistance = distance;
+		
+		return camera.GetOrigin() + (direction * 2000 * distance);
+	}
+	
+	
+	private float RayCastFromCamera(vector direction, CameraBase camera)
+	{		
+		autoptr TraceParam param = new TraceParam;
+		param.LayerMask = EPhysicsLayerDefs.Projectile;
+		param.Flags = TraceFlags.ENTS | TraceFlags.VISIBILITY | TraceFlags.WORLD | TraceFlags.OCEAN;
+		param.Start = camera.GetOrigin() + (direction * 2);
+		param.End = camera.GetOrigin() + (direction * 2000);
+
+		return GetGame().GetWorld().TraceMove(param, null);
+	}
+}

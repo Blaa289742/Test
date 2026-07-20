@@ -1,0 +1,103 @@
+[BaseContainerProps()]
+class RVX_HSI_MFD_Sample : RVX_MFDComponent
+{	
+	// Widgets
+    protected ImageWidget headingCircle;
+	protected ImageWidget mapOverlayWidget;
+	
+	// Runtime
+	protected SCR_MapEntity mapEnt;
+	protected float mapScale = 1.5;
+	private float mapOffsetX = 0;
+	private float mapOffsetY = 0;
+	
+	// Override in MFD page
+	override ResourceName GetTemplate()
+	{
+		return "{5DB5CC91866CFDC3}UI/layouts/MFD_HSI_Sample.layout";
+	}
+
+    override protected void PreloadWidgets()
+    {
+        super.PreloadWidgets();
+        headingCircle = ImageWidget.Cast(FindWidget("HSI_Circle"));
+		mapOverlayWidget = ImageWidget.Cast(FindWidget("MapOverlay"));
+		
+		LoadMapTexture();
+    }
+	
+	private void LoadMapTexture()
+	{
+		ResourceName mapTexture = GetMapTexture();
+		mapOverlayWidget.LoadImageTexture(0, mapTexture);
+		mapOverlayWidget.SetImage(0);
+	}
+	
+	override protected void PreloadComponents()
+	{
+		super.PreloadComponents();
+		
+		IEntity vehicle = GetOwner().GetParent();
+		mapEnt = SCR_MapEntity.GetMapInstance();
+	}
+	
+	// Override in MFD page
+	override void OnButtonPressed(string buttonIndex)
+    {
+		super.OnButtonPressed(buttonIndex);	
+		
+		switch(buttonIndex)
+		{
+			case "HSI": { pageManager.SetCurrentPageName("HSI"); break; }
+			case "AttitudeIndicator": { pageManager.SetCurrentPageName("AttitudeIndicator"); break; }
+			case "FLIR": { pageManager.SetCurrentPageName("FLIR"); break; }
+		}
+    }
+	
+    override void UpdateDisplay(float timeSlice)
+    {
+		super.UpdateDisplay(timeSlice);
+	
+		UpdateMap();
+		UpdateHSICircle();
+    }
+	
+	private void UpdateMap()
+	{
+		if (!mapEnt)
+			return;
+		vector pos = GetOwner().GetOrigin();
+		vector angles = GetOwner().GetYawPitchRoll();
+		float yaw = -angles[0];
+		
+		float mapSizeX = mapEnt.GetMapSizeX();
+		float mapSizeY = mapEnt.GetMapSizeY();
+		
+		float pivotX = pos[0] / mapSizeX;
+		float pivotY = 1 - (pos[2] / mapSizeY);
+		
+		mapOffsetX = 512 - (pivotX * 1024 * GetMapScale());
+		mapOffsetY = 512 - (pivotY * 1024 * GetMapScale());
+		
+		
+
+		FrameSlot.SetPos(mapOverlayWidget, mapOffsetX, mapOffsetY);
+		mapOverlayWidget.SetPivot(pivotX, pivotY);
+		mapOverlayWidget.SetRotation(yaw);
+		FrameSlot.SetSize(mapOverlayWidget, 1024 * GetMapScale(), 1024 * GetMapScale());
+	}
+	
+	private float GetMapScale()
+	{
+		return mapScale;
+	}
+	
+	private void UpdateHSICircle()
+	{
+	    vector yawPitchRoll = GetOwner().GetYawPitchRoll();
+		float heading = -yawPitchRoll[0];	
+		if(heading < 0)
+			heading += 360;
+		headingCircle.SetRotation(heading);
+	}
+}

@@ -1,0 +1,15 @@
+[BaseContainerProps()]
+class RVX_WCS_Armament_WeaponGroup: WCS_Armament_WeaponGroup
+{
+	[Attribute("", desc: "Weapon code. Used in pylon definitions, must be defined and unique")]
+	string weaponCode;	
+	
+	[Attribute("", desc: "Weapon name to be used in Aircraft Manager UI")]
+	string weaponLabel;
+	
+	int GetWeaponSlotIndex()
+	{
+		return slotIndex;
+	}
+	//
+}

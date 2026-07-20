@@ -1,0 +1,325 @@
+class RVX_WCS_Armament_LoadoutComponentClass : WCS_Armament_LoadoutComponentClass
+{
+
+}
+class RVX_WCS_Armament_LoadoutComponent : WCS_Armament_LoadoutComponent
+{
+	// Parameters
+	[Attribute(desc: "Pylon setup (each entry represent pair of pylons)")]
+	protected ref array<ref PylonsDefinition> pylonsConfiguration;
+	
+	[Attribute(desc: "Available pylon weapons")]
+	protected ref array<ref RVX_WCS_Armament_WeaponGroup> availableWeaponsList;
+	
+	
+	// Runtime
+	protected ref array<ref RVX_WCS_Armament_WeaponGroup> currentWeaponGroup = {};
+	
+	//------------------------------------------------------------------------------------------------
+	override void EOnInit(IEntity owner)
+	{
+		bool hasInitialWeapons = false;
+		if (pylonsConfiguration)
+		{
+			foreach (PylonsDefinition pylon : pylonsConfiguration)
+			{
+				if (pylon.initialWeaponCode != "")
+				{
+					hasInitialWeapons = true;
+					break;
+				}
+			}
+		}
+		
+		if (hasInitialWeapons)
+		{
+			BuildInitialArmamentGroups();
+			FillWeaponsData();
+		}
+		
+		super.EOnInit(owner);
+		
+		if (hasInitialWeapons)
+			WeaponsChanged();
+	}
+	
+	void SetWeapons(RVX_StationWeaponConfiguration config)
+	{
+		IEntity player = GetGame().GetPlayerController().GetControlledEntity();
+		RplId creatorId = RplComponent.Cast(GetOwner().FindComponent(RplComponent)).Id();
+       	SCR_ChimeraCharacter character = SCR_ChimeraCharacter.Cast(player);
+        character.SetVehicleWeapons(creatorId, config.assignedPylonWeaponCodes);
+	}
+	
+	void LoadWeapons(array<string> assignedPylonWeaponCodes)
+	{
+		UnRegisterHandlers();
+		DeleteWeapons();
+		m_WeaponManager.GetWeaponQueues().Clear();
+		
+		map<string, ref WCS_Armament_WeaponGroup> weaponGroupsMap = new map<string,  ref WCS_Armament_WeaponGroup>();
+		int slotIndex = 1;
+		int weaponCodeIndex = 0;
+		foreach(PylonsDefinition pylonDefinition: pylonsConfiguration)
+		{
+			ref array<ref WCS_Armament_WeaponInfo> pylons = {};
+			if (pylonDefinition.leftPylon)
+				pylons.Insert(pylonDefinition.leftPylon);
+			if (pylonDefinition.rightPylon)
+				pylons.Insert(pylonDefinition.rightPylon);
+			
+			string weaponCode = assignedPylonWeaponCodes.Get(weaponCodeIndex);
+			if (weaponGroupsMap.Get(weaponCode))
+			{
+				WCS_Armament_WeaponGroup existingWeaponPylonGroup = weaponGroupsMap.Get(weaponCode);
+				for ( int i = 0; i < pylons.Count(); i++ )
+				{
+					existingWeaponPylonGroup.weaponsInfo.Insert( pylons.Get(i) );
+				}
+				weaponGroupsMap.Set(weaponCode, existingWeaponPylonGroup);
+			} else 
+			{
+				ref RVX_WCS_Armament_WeaponGroup weaponPylonGroup = FindPylonWeapon(weaponCode);
+				weaponPylonGroup.weaponsInfo = pylons;
+				weaponPylonGroup.slotIndex = slotIndex;
+				weaponGroupsMap.Insert(weaponCode, weaponPylonGroup);
+				slotIndex++;
+			}
+			
+			weaponCodeIndex++;
+		}
+		
+		set<string> uniqueWeaponCodes = new set<string>();
+		foreach(string code: assignedPylonWeaponCodes)
+			uniqueWeaponCodes.Insert(code);
+		
+		
+		array<ref WCS_Armament_LoadoutGroup> weaponGroups = {};
+		for (int i = 0; i < uniqueWeaponCodes.Count(); i++)
+		{
+			weaponGroups.Insert(weaponGroupsMap.Get(uniqueWeaponCodes.Get(i)));
+		}
+		
+		m_ArmamentGroups = weaponGroups;
+		
+		super.CreateWeaponQueueFast();
+		Print("RVX_DEBUG: loadWeapons");
+		GetGame().GetCallqueue().CallLater(SelectFirstWeapon, 500);
+		GetGame().GetCallqueue().CallLater(WeaponsChanged, 750);
+		GetGame().GetCallqueue().CallLater(RegisterHandlers, 1000);
+		
+		FillWeaponsData();
+	}
+	
+	ref array<ref RVX_WCS_Armament_WeaponGroup> GetWeaponGroups()
+	{
+		return currentWeaponGroup;
+	}
+
+	ref RVX_StationWeaponConfiguration GetCurrentPylonConfig()
+	{
+	    ref RVX_StationWeaponConfiguration config = new RVX_StationWeaponConfiguration();
+		ref array<ref RVX_WCS_Armament_WeaponGroup> weaponGroups = GetWeaponGroups();
+		foreach(RVX_WCS_Armament_WeaponGroup weapon: weaponGroups)
+		{
+			config.assignedPylonWeaponCodes.Insert(weapon.weaponCode);
+		}
+		
+		return config;
+	}
+	
+	ref array<ref PylonsDefinition> GetPylonDefinitions()
+	{
+		foreach(ref PylonsDefinition definition: pylonsConfiguration)
+		{
+			ref array<ref RVX_LoadoutWeaponDefinition> weapons = {};
+			foreach(string code: definition.availableWeaponCodes)
+			{
+				foreach(RVX_WCS_Armament_WeaponGroup wpnGroup: availableWeaponsList)
+				{
+					if (wpnGroup.weaponCode == code)
+					{
+						ref RVX_LoadoutWeaponDefinition loadoutDefinition = new RVX_LoadoutWeaponDefinition();
+						loadoutDefinition.weaponCode = wpnGroup.weaponCode;
+						loadoutDefinition.wepaonLabel = wpnGroup.weaponLabel;
+						weapons.Insert(loadoutDefinition);
+					}
+				}
+			}
+			definition.availableWeapons = weapons;
+		}
+		return pylonsConfiguration;
+	}
+	
+	///////////
+	BaseWeaponManagerComponent GetWeaponManager()
+	{
+		return m_BaseWeaponManagerComponent;
+	}
+	
+	protected ref RVX_WCS_Armament_WeaponGroup FindPylonWeapon(string code)
+	{
+		ref RVX_WCS_Armament_WeaponGroup result = null;
+		for (int i = 0; i < availableWeaponsList.Count(); i++)
+		{			
+			if (availableWeaponsList[i].weaponCode == code)
+			{
+				result = availableWeaponsList[i];
+			}
+		}
+		return result;
+	}
+	
+	protected void BuildInitialArmamentGroups()
+	{
+		map<string, ref WCS_Armament_WeaponGroup> weaponGroupsMap = new map<string, ref WCS_Armament_WeaponGroup>();
+		int slotIndex = 1;
+		
+		foreach (PylonsDefinition pylonDef : pylonsConfiguration)
+		{
+			string weaponCode = pylonDef.initialWeaponCode;
+			if (weaponCode == "")
+				continue;
+			
+			ref array<ref WCS_Armament_WeaponInfo> pylons = {};
+			if (pylonDef.leftPylon)
+				pylons.Insert(pylonDef.leftPylon);
+			if (pylonDef.rightPylon)
+				pylons.Insert(pylonDef.rightPylon);
+			
+			if (weaponGroupsMap.Contains(weaponCode))
+			{
+				WCS_Armament_WeaponGroup existingGroup = weaponGroupsMap.Get(weaponCode);
+				for (int i = 0; i < pylons.Count(); i++)
+					existingGroup.weaponsInfo.Insert(pylons.Get(i));
+			}
+			else
+			{
+				RVX_WCS_Armament_WeaponGroup wpnGroup = FindPylonWeapon(weaponCode);
+				if (wpnGroup)
+				{
+					wpnGroup.weaponsInfo = pylons;
+					wpnGroup.slotIndex = slotIndex;
+					weaponGroupsMap.Insert(weaponCode, wpnGroup);
+					slotIndex++;
+				}
+			}
+		}
+		
+		set<string> uniqueCodes = new set<string>();
+		foreach (PylonsDefinition pylonDef : pylonsConfiguration)
+		{
+			if (pylonDef.initialWeaponCode != "" && !uniqueCodes.Contains(pylonDef.initialWeaponCode))
+				uniqueCodes.Insert(pylonDef.initialWeaponCode);
+		}
+		
+		array<ref WCS_Armament_LoadoutGroup> weaponGroups = {};
+		foreach (string uniqueCode : uniqueCodes)
+			weaponGroups.Insert(weaponGroupsMap.Get(uniqueCode));
+		
+		m_ArmamentGroups = weaponGroups;
+	}
+	
+	protected void SelectFirstWeapon()
+	{
+		m_WeaponManager.CycleWeaponGroup(GetFirstValidSlotIndex());
+	}
+	
+	protected void DeleteWeapons()
+	{
+		array<IEntity> weapons = {};
+		IEntity child = GetOwner().GetChildren();
+		while (child)
+		{
+			if (WCS_Armament_WeaponComponent.Cast(child.FindComponent(WCS_Armament_WeaponComponent)))
+				weapons.Insert(child);
+
+			child = child.GetSibling();
+		}
+		
+		foreach(IEntity entity: weapons)
+		{
+			SCR_EntityHelper.DeleteEntityAndChildren(entity);
+		}
+	}
+	
+	protected void FillWeaponsData()
+	{
+		currentWeaponGroup.Clear();
+		foreach(WCS_Armament_LoadoutGroup armamentGroup: m_ArmamentGroups)
+		{
+			currentWeaponGroup.Insert(RVX_WCS_Armament_WeaponGroup.Cast(armamentGroup));
+		}
+
+		// sorting groups by slot index
+		for (int i = 0; i < currentWeaponGroup.Count() - 1; i++)
+		{
+			for (int j = 0; j < currentWeaponGroup.Count() - i - 1; j++)
+			{
+				int indexA = WCS_Armament_LoadoutUtils.GetGroupSlotIndex(currentWeaponGroup[j]);
+				int indexB = WCS_Armament_LoadoutUtils.GetGroupSlotIndex(currentWeaponGroup[j + 1]);
+
+				if (indexA > indexB)
+				{
+					auto temp = currentWeaponGroup[j];
+					currentWeaponGroup[j] = currentWeaponGroup[j + 1];
+					currentWeaponGroup[j + 1] = temp;
+				}
+			}
+		}
+	}
+}
+
+class RVX_StationWeaponConfiguration
+{
+	//each string code represent weapon on station
+	ref array<string> assignedPylonWeaponCodes = {};
+}
+
+[BaseContainerProps()]
+class PylonsDefinition
+{
+	[Attribute("StationName", desc: "Name of the station that will be displayed in Aircraft Manager")]
+	string stationName;
+	
+	[Attribute()]
+	ref WCS_Armament_WeaponInfo leftPylon;
+	
+	[Attribute()]
+	ref WCS_Armament_WeaponInfo rightPylon;
+	
+	[Attribute("", desc: "Weapon codes from available weapons list below")]
+	ref array<string> availableWeaponCodes;
+	
+	[Attribute("", desc: "Weapon initially loaded in this vehicle")]
+	string initialWeaponCode;
+	
+	ref array<ref RVX_LoadoutWeaponDefinition> availableWeapons;
+}
+
+modded class SCR_ChimeraCharacter
+{ 	
+	void SetVehicleWeapons(RplId vehicleId, array<string> assignedPylonWeaponCodes)
+    { 
+        Rpc(RpcAsk_SetVehicleWeapons, vehicleId, assignedPylonWeaponCodes);
+    }
+	
+	[RplRpc(RplChannel.Reliable, RplRcver.Server)]
+    private void RpcAsk_SetVehicleWeapons(RplId vehicleId, array<string> assignedPylonWeaponCodes)
+    {
+		RpcAsk_BroadcastSetVehicleWeapons(vehicleId, assignedPylonWeaponCodes);
+		Rpc(RpcAsk_BroadcastSetVehicleWeapons, vehicleId, assignedPylonWeaponCodes);
+    }
+	
+	[RplRpc(RplChannel.Reliable, RplRcver.Broadcast)]
+    private void RpcAsk_BroadcastSetVehicleWeapons(RplId vehicleId, array<string> assignedPylonWeaponCodes)
+    {
+       	RplComponent comp = RplComponent.Cast(Replication.FindItem(vehicleId));
+		if(comp)
+		{
+			IEntity vehicle = comp.GetEntity();
+			RVX_WCS_Armament_LoadoutComponent loadoutComp = RVX_WCS_Armament_LoadoutComponent.Cast(vehicle.FindComponent(RVX_WCS_Armament_LoadoutComponent));
+			loadoutComp.LoadWeapons(assignedPylonWeaponCodes);
+		}
+    }
+}

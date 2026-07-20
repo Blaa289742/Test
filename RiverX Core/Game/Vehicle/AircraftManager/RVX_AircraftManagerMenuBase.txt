@@ -1,0 +1,171 @@
+class RVX_AircraftManagerMenuBase: ChimeraMenuBase
+{
+	protected ref RVX_AircraftManagerPage currentPage;
+	
+	// tab widgets
+	FrameWidget navigationTab;
+	FrameWidget loadoutTab;
+	RVX_TabWidget navigationTabButton;
+	RVX_TabWidget loadoutTabButton;
+		
+	protected ref RVX_AircraftManagerMapPage pageMap;
+	protected ref RVX_AircraftManagerLoadoutPage loadoutPage;
+	
+	private float cursorX = 300;
+	private float cursorY = 300;
+	
+	override void OnMenuOpened()
+	{
+		super.OnMenuOpened();
+		pageMap = GetMapPage();		
+		loadoutPage = GetLoadoutPage();		
+		
+		pageMap.Init(GetRootWidget());
+		loadoutPage.Init(GetRootWidget());
+	
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonCancel").Insert(OnClose);
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonOk").Insert(Save);
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonNavTab").Insert(OnNavTabOpen);
+		ButtonActionComponent.GetOnAction(GetRootWidget(), "ButtonLoadoutTab").Insert(OnLoadoutTabOpen);
+		
+		navigationTab = FrameWidget.Cast(GetRootWidget().FindAnyWidget("NavigationPage"));
+		loadoutTab = FrameWidget.Cast(GetRootWidget().FindAnyWidget("LoadoutPage"));
+		navigationTabButton = RVX_TabWidget.Cast(GetRootWidget().FindAnyWidget("NavTab").FindHandler(RVX_TabWidget));
+		loadoutTabButton = RVX_TabWidget.Cast(GetRootWidget().FindAnyWidget("LoadoutTab").FindHandler(RVX_TabWidget));
+		
+		InitGamepadCursor();
+		
+		currentPage = pageMap;
+	}
+
+	override void OnMenuUpdate(float tDelta)
+	{
+		super.OnMenuUpdate(tDelta);
+		GetGame().GetInputManager().ActivateContext("RVX_AircraftManager");
+		
+		pageMap.Update();		
+		UpdateTabs();
+	}
+	
+////// Pages to override if needed
+	ref RVX_AircraftManagerMapPage GetMapPage()
+	{
+		return new RVX_AircraftManagerMapPage();
+	}
+	
+
+	ref RVX_AircraftManagerLoadoutPage GetLoadoutPage()
+	{
+		return new RVX_AircraftManagerLoadoutPage();
+	}
+	
+////// Updates per frame
+	void UpdateTabs()
+	{
+		navigationTab.SetVisible(currentPage == pageMap);
+		navigationTabButton.SetSelected(currentPage == pageMap);
+		loadoutTab.SetVisible(currentPage == loadoutPage);
+		loadoutTabButton.SetSelected(currentPage == loadoutPage);
+	}	
+////// Action handlers
+	protected void OnClose()
+	{
+		GetGame().GetInputManager().ActivateContext("DefaultContext");
+		Close();
+	}
+	
+	protected void OnNavTabOpen()
+	{
+		currentPage.OnTabClosed();
+		currentPage = pageMap;
+	}
+	
+	protected void OnLoadoutTabOpen(Widget buttonWidget)
+	{
+		currentPage.OnTabClosed();
+		currentPage = loadoutPage;
+	}
+	
+////// Save handlers
+	protected void Save()
+	{
+		pageMap.Save();
+		loadoutPage.Save();
+		OnClose();
+	}
+	
+	
+////// Cursor support
+	private void InitGamepadCursor()
+	{
+		GetGame().GetCallqueue().CallLater(SetInitialCursorPosition, 300, false);
+		g_Game.GetInputManager().AddActionListener("AircraftManagerGamepadCursorX", EActionTrigger.VALUE, OnInputGamepadCursorH);
+		g_Game.GetInputManager().AddActionListener("AircraftManagerGamepadCursorY", EActionTrigger.VALUE, OnInputGamepadCursorV);
+		g_Game.GetInputManager().AddActionListener("AircraftManagerGamepadCursorRightDepress", EActionTrigger.VALUE, OnInputGamepadCursorRightDepress);
+		g_Game.GetInputManager().AddActionListener("AircraftManagerGamepadCursorLeftDepress", EActionTrigger.VALUE, OnInputGamepadCursorLeftDepress);
+	}
+	
+	private void SetInitialCursorPosition()
+	{
+		float screenWidth, screenHeight;
+		GetRootWidget().GetScreenSize(screenWidth, screenHeight);
+		cursorX = screenWidth / 2;
+		cursorY = screenHeight / 2;
+	}
+	
+	float panStickMultiplier = 0.9;
+	protected void OnInputGamepadCursorH(float value, EActionTrigger reason)
+	{
+		if (value == 0)
+			return;
+
+		float maxX, maxY;
+		WorkspaceWidget workspace = GetGame().GetWorkspace();
+		if (GetRootWidget() && workspace)
+		{
+			GetRootWidget().GetScreenSize(maxX, maxY);
+		}
+
+		cursorX = Math.Clamp(cursorX + value * System.GetFrameTimeS() * 1000 * panStickMultiplier, 1, maxX);
+		
+		GetGame().GetInputManager().SetLastUsedInputDevice(EInputDeviceType.MOUSE);
+		GetGame().GetInputManager().SetCursorPosition(cursorX,cursorY);
+	}
+	
+	protected void OnInputGamepadCursorV(float value, EActionTrigger reason)
+	{
+		if (value == 0)
+			return;
+
+		float maxX, maxY;
+		WorkspaceWidget workspace = GetGame().GetWorkspace();
+		if (GetRootWidget() && workspace)
+		{
+			GetRootWidget().GetScreenSize(maxX, maxY);
+		}
+
+		cursorY = Math.Clamp(cursorY - value * System.GetFrameTimeS() * 1000 * panStickMultiplier, 1, maxY);		
+		GetGame().GetInputManager().SetCursorPosition(cursorX, cursorY);
+	}
+	
+	protected void OnInputGamepadCursorLeftDepress(float value, EActionTrigger reason)
+	{
+		if (value == 0)
+			return;
+
+		GetGame().GetInputManager().SetActionValue("MouseRight", 1);
+	}
+	
+	protected void OnInputGamepadCursorRightDepress(float value, EActionTrigger reason)
+	{
+		if (value == 0)
+			return;
+
+		GetGame().GetInputManager().SetActionValue("MouseLeft", 1);
+	}
+}
+
+modded enum ChimeraMenuPreset 
+{
+	RVX_AircraftManagerMenu
+}

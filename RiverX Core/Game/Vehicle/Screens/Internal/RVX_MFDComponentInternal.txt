@@ -1,0 +1,179 @@
+// Base MFD component. All pages should extend this
+[BaseContainerProps()]
+class RVX_MFDComponentInternal
+{
+	ResourceName GetTemplate() { return ""; }
+	
+	void PreloadWidgets() {}
+	
+	void SetWidgetAsBlinking(Widget widget, int blinkTimeInMs = 100)
+	{
+		if (!widget)
+			return;
+		blinkingWidgets.Insert(widget);
+	}
+	
+	void SetWidgetAsNotBlinking(Widget widget, int blinkTimeInMs = 100)
+	{
+		if (!widget)
+			return;
+		blinkingWidgets.RemoveItem(widget);
+		widget.SetVisible(true);
+	}
+		
+	void PreloadComponents() {}
+
+	void UpdateDisplay(float timeSlice) {}
+	
+	void OnButtonPressed(string buttonIndex) {}
+	
+	void SetScreenEnabled(bool enabled)
+	{
+		SetDisplayVisibility(enabled);
+	}
+	
+	Widget FindWidget(string name)
+	{
+		return rootWidget.FindAnyWidget(name);
+	}
+	
+	IEntity GetOwner()
+	{
+		return ownerEnt;
+	}
+	
+	////////////////////////////////////////////////////////////// DO NOT OVERRIDE /////////////////////////////////////////////////////////////
+	protected Widget rootWidget;
+	protected RTTextureWidget renderTextureWidget;
+	protected RVX_MFD_Manager pageManager;
+	protected ref array<Widget> blinkingWidgets = {};
+	
+	protected IEntity ownerEnt;
+
+	protected bool currentScreenVisibilityState = false;
+	protected BaseVehicleControllerComponent baseVehicleController;
+	protected SignalsManagerComponent signalManager;
+	
+	/* 
+	* Used by page manager for delayed initialization
+	*/
+    void Init(IEntity owner, RVX_MFD_Manager pm)
+    {
+		ownerEnt = owner;
+		pageManager = pm;
+		if (owner.GetParent())
+		{
+			baseVehicleController = BaseVehicleControllerComponent.Cast(owner.GetParent().FindComponent(BaseVehicleControllerComponent));
+		}
+		InitializeLayout(owner);
+    }
+	
+	void PreloadWidgetsInternal()
+	{
+		renderTextureWidget = RTTextureWidget.Cast(FindWidget("RTTexture0"));
+		SetDisplayVisibility(false);
+		PreloadWidgets();
+		GetGame().GetCallqueue().CallLater(Blink, 100, true);
+	}
+	
+	void PreloadComponentsInternal()
+	{
+		if (GetOwner().GetParent())
+		{
+			signalManager = Inject<SignalsManagerComponent>.Get(GetOwner().GetParent());
+		}
+		PreloadComponents();
+	}
+	
+	void UpdateDisplayInternal(float timeSlice)
+	{
+		UpdateDisplay(timeSlice);
+	}
+	
+    private void InitializeLayout(IEntity owner)
+    {
+        IEntity parentEntity = owner.GetParent();		
+		if (!GetGame().GetWorkspace())
+        {
+            Print("RVX_MFDComponent: Workspace not available", LogLevel.ERROR);
+            return;
+        }
+
+        rootWidget = GetGame().GetWorkspace().CreateWidgets(GetTemplate());
+        if (!rootWidget)
+        {
+            Print("RVX_MFDComponent: Failed to create root widget", LogLevel.ERROR);
+            return;
+        }
+
+		PreloadComponentsInternal();
+		PreloadWidgetsInternal();
+      
+        if (!rootWidget)
+        {
+            Print("RVX_MFDComponent: Failed to find required widgets", LogLevel.ERROR);
+            return;
+        }
+    }	
+	
+	void OnPageActivated()
+    {
+        if(!renderTextureWidget)
+			return;
+	    SetDisplayVisibility(true);
+    }
+
+    void OnPageDeactivated()
+    {
+		if(!renderTextureWidget)
+			return;
+	    SetDisplayVisibility(false);
+    }
+
+    protected void SetDisplayVisibility(bool isVisible)
+    {
+        if (!renderTextureWidget)
+            return;
+					
+		renderTextureWidget.SetEnabled(isVisible);
+		renderTextureWidget.SetVisible(isVisible);
+		renderTextureWidget.SetVisible(isVisible);
+		
+		if(currentScreenVisibilityState != isVisible)
+		{
+			if (isVisible)
+				renderTextureWidget.SetRenderTarget(ownerEnt);
+			else
+				renderTextureWidget.RemoveRenderTarget(ownerEnt);
+		}
+		
+		currentScreenVisibilityState = isVisible;
+    }
+	
+	protected float GetSignalValue(string signalName)
+	{
+		if(!signalManager)
+			return 0;
+		
+		int index = signalManager.FindSignal(signalName);
+		if (index == -1)
+			return 0;
+		
+		return signalManager.GetSignalValue(index);
+	}
+	
+	private bool IsVehicleEngineOn()
+	{
+		if (baseVehicleController)
+			return true;
+		return baseVehicleController && baseVehicleController.IsEngineOn();
+	}
+	
+	private void Blink()
+	{
+		foreach(Widget widget: blinkingWidgets)
+		{
+			widget.SetVisible(!widget.IsVisible());
+		}	
+	}
+}

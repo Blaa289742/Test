@@ -1,0 +1,10 @@
+class RVX_RKT_WCS_Armament_LaserSeekerComponentClass : RVX_AGM_WCS_Armament_LaserSeekerComponentClass {}
+
+class RVX_RKT_WCS_Armament_LaserSeekerComponent : RVX_AGM_WCS_Armament_LaserSeekerComponent
+{
+	override void CalculateTargetPosition()
+	{
+		Print("AGM fired");
+		super.CalculateTargetPosition();
+	}
+}
